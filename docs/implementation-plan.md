@@ -1,6 +1,6 @@
 # План реализации Dexity
 
-Основан на спецификациях в `specs/`, `server/specs/`, `client/specs/`. Реализация пошагово, файл за файлом.
+Основан на `specs/overview.md`, `server/specs/backend.md`, `client/specs/frontend.md`. Реализация пошагово, файл за файлом.
 
 ## Бэкенд
 

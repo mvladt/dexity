@@ -12,11 +12,8 @@
 
 ```
 dexity/
-├── specs/          # проектный уровень: архитектура, ENV, shared-типы, MVP-скоп
-├── client/         # React + Vite
-│   └── specs/      # UI: компоненты, сторы, роутинг, SSE-парсер
-├── server/         # Fastify + SQLite
-│   └── specs/      # API, БД, стриминг, деплой
+├── client/   # React + Vite (FSD-архитектура)
+├── server/   # Fastify + SQLite (feature-modules)
 ├── nginx/
 └── deploy/
 ```
@@ -49,11 +46,13 @@ cd client && npm run dev
 `server/.env`: `PORT`, `NODE_ENV`, `ACCESS_TOKEN`, `YANDEX_FOLDER_ID`, `YANDEX_API_KEY`, `MODEL_ID`, `DATABASE_PATH`, `CORS_ORIGIN`  
 `client/.env`: `VITE_API_URL`
 
-## Спецификации
+## Спецификация
 
-- `specs/overview.md` — архитектура, ENV, shared-типы, MVP-скоп, пользовательские сценарии
-- `server/specs/backend.md` — БД, API-эндпоинты, стриминг, структура сервера, деплой
-- `client/specs/frontend.md` — структура клиента, компоненты AIKit, Zustand-сторы, SSE-парсер, роутинг
+Спеки хранятся рядом с кодом:
+
+- `specs/overview.md` — обзор проекта, общие типы, пользовательские сценарии
+- `server/specs/backend.md` — API, схема БД, поток стриминга, деплой
+- `client/specs/frontend.md` — компоненты, Zustand-сторы, SSE-парсер, роутинг
 
 ## Контекст сессий
 
