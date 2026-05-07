@@ -51,6 +51,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           disabled={streaming}
           status={streaming ? 'streaming' : 'ready'}
           view="simple"
+          bodyProps={{ placeholder: 'Напишите сообщение…' }}
         />
       </div>
     </div>

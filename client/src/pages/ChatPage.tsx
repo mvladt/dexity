@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { EmptyContainer } from '@gravity-ui/aikit';
-import type { Suggestion } from '@gravity-ui/aikit';
+import { EmptyContainer, PromptInput } from '@gravity-ui/aikit';
+import type { Suggestion, TSubmitData } from '@gravity-ui/aikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
 import { ChatSidebar } from '../components/ChatSidebar';
@@ -76,6 +76,11 @@ export function ChatPage() {
     }, 100);
   };
 
+  const handleNewMessage = async (data: TSubmitData) => {
+    if (!data.content.trim()) return;
+    await handleSuggestion(data.content);
+  };
+
   return (
     <div className="chat-layout">
       <ChatSidebar />
@@ -91,13 +96,22 @@ export function ChatPage() {
             onUserMessage={handleUserMessage}
           />
         ) : (
-          <div className="chat-empty">
-            <EmptyContainer
-              title="Чем могу помочь?"
-              suggestions={SUGGESTIONS}
-              onSuggestionClick={handleSuggestion}
-              layout="grid"
-            />
+          <div className="chat-content">
+            <div className="chat-empty">
+              <EmptyContainer
+                title="Чем могу помочь?"
+                suggestions={SUGGESTIONS}
+                onSuggestionClick={handleSuggestion}
+                layout="grid"
+              />
+            </div>
+            <div className="chat-input">
+              <PromptInput
+                onSend={handleNewMessage}
+                bodyProps={{ placeholder: 'Напишите сообщение…' }}
+                view="simple"
+              />
+            </div>
           </div>
         )}
       </div>
