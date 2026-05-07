@@ -9,7 +9,13 @@ SDD v3 · Node.js + Fastify · React 18 + GravityUI/AIKit
 ```
 dexity/
 ├── client/                  # React 18 + TypeScript + Vite
+│   └── specs/
+│       └── frontend.md      # компоненты, сторы, SSE-парсер, роутинг
 ├── server/                  # Node.js + Fastify + SQLite
+│   └── specs/
+│       └── backend.md       # API, схема БД, поток стриминга, деплой
+├── specs/
+│   └── overview.md          # обзор проекта, общие типы, сценарии
 ├── shared/
 │   └── types.ts             # общие типы (Chat, Message, SSEEvent)
 ├── nginx/
