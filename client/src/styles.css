@@ -60,6 +60,10 @@ body,
   overflow-x: hidden;
 }
 
+.chat-sidebar-list .g-aikit-history__container {
+  width: 100%;
+}
+
 .chat-main {
   flex: 1;
   display: flex;
@@ -81,10 +85,14 @@ body,
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  max-width: 860px;
+  width: 100%;
+  margin-inline: auto;
 }
 
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
 }
