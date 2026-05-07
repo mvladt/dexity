@@ -10,6 +10,8 @@
 dexity/
 ├── client/                  # React 18 + TypeScript + Vite
 ├── server/                  # Node.js + Fastify + SQLite
+├── shared/
+│   └── types.ts             # общие типы (Chat, Message, SSEEvent)
 ├── nginx/
 │   └── dexity.conf
 ├── deploy/
@@ -84,8 +86,12 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
-CREATE INDEX IF NOT EXISTS idx_chats_user_id    ON chats(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_id      ON messages(chat_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_chats_user_id         ON chats(user_id);
+
+-- Гарантируем существование дефолтного пользователя (user_id=1 в chats)
+INSERT OR IGNORE INTO users (id) VALUES (1);
 ```
 
 ### Drizzle-схема (`server/src/db/schema.ts`)
@@ -135,8 +141,20 @@ export const messages = sqliteTable(
 
 ## 4. TypeScript-интерфейсы (общие)
 
+Файл `shared/types.ts` — единый источник истины. Оба проекта импортируют из него через относительный путь:
+
 ```typescript
-// shared types — копируются между client/server вручную (один файл types.ts на каждой стороне)
+// server/src/types.ts  и  client/src/types.ts — тонкий re-export:
+export type { Chat, Message, SSEEvent } from '../../shared/types'
+```
+
+`tsconfig.json` обоих проектов добавляет alias для прямых импортов:
+```json
+"paths": { "@shared/*": ["../shared/*"] }
+```
+
+```typescript
+// shared/types.ts
 
 export interface Chat {
   id: number;
@@ -186,6 +204,8 @@ export type SSEEvent =
 **Response 401:** `{ "ok": false, "error": "Invalid token" }`
 
 > Фронт получает токен из формы → шлёт `POST /api/auth/verify` → если ok, кладёт в `localStorage`. Дальше все запросы идут с `Authorization: Bearer <token>`.
+>
+> **Принятый риск:** `ACCESS_TOKEN` хранится в `localStorage` и доступен любому JS на странице. Вектор атаки через LLM-ответы закрыт отключением raw HTML в `MarkdownRenderer` (§9). Дополнительная защита — CSP-заголовки в Nginx (§13.1). Для личного однопользовательского инструмента этот уровень приемлем.
 
 ---
 
@@ -207,6 +227,20 @@ export type SSEEvent =
 **PATCH `/api/chats/:chatId` Response 200:** `Chat`
 
 **DELETE `/api/chats/:chatId` Response 200:** `{ "ok": true }`
+
+---
+
+### Валидация запросов (Zod)
+
+| Параметр / тело                              | Схема                                                        |
+| -------------------------------------------- | ------------------------------------------------------------ |
+| `:chatId` (все маршруты)                     | `z.coerce.number().int().positive()`                         |
+| `POST /api/chats` body                       | `z.object({ title: z.string().min(1).max(200).optional() })` |
+| `PATCH /api/chats/:chatId` body              | `z.object({ title: z.string().min(1).max(200) })`            |
+| `POST …/messages/stream` body                | `z.object({ content: z.string().min(1).max(10_000) })`       |
+| `POST /api/auth/verify` body                 | `z.object({ token: z.string().min(1) })`                     |
+
+Fastify `bodyLimit: 102_400` (100 KB).
 
 ---
 
@@ -258,6 +292,30 @@ data: {"type":"error","code":"quota","message":"Yandex API quota exceeded"}
 | `429`              | `quota`  | «Лимит запросов исчерпан»                    |
 | `5xx`, network err | `server` | «Сервис недоступен, попробуйте позже»        |
 
+**Ошибки до открытия SSE (шаги 1–2 в §6):**
+
+Если ошибка возникла до установки SSE-соединения, бэк возвращает обычный HTTP-ответ:
+
+```json
+HTTP 401: { "error": "Unauthorized" }
+HTTP 404: { "error": "Chat not found" }
+```
+
+Клиент проверяет `response.ok` перед чтением стрима и маппит на `onError`.
+
+**Keep-alive:**
+
+Каждые 15 секунд бэк шлёт SSE-комментарий для предотвращения таймаута Nginx:
+
+```
+: ping
+
+```
+
+Клиент игнорирует строки, начинающиеся с `:`. Поле `event:` не используется — только `data:`.
+
+> **Реализация на клиенте:** используется `fetch` + `ReadableStream`, **не** `EventSource`. Причина: `EventSource` не поддерживает POST-запросы и заголовок `Authorization`.
+
 ---
 
 ## 6. Поток стриминга (Server-side)
@@ -269,6 +327,8 @@ POST /api/chats/:chatId/messages/stream
 ├── 2. Проверить, что chat существует (404 если нет)
 ├── 3. Загрузить ПОСЛЕДНИЕ 20 сообщений чата:
 │      SELECT * FROM messages WHERE chat_id=? ORDER BY created_at DESC LIMIT 20  → reverse
+│      Если первое сообщение в окне — role='assistant' (пара разрезана LIMIT), отбросить его.
+│      Запомнить userMessagesBefore = count(role='user') в этом окне (нужно для шага 10).
 │      (стратегия контекста на MVP: окно по количеству, без учёта токенов)
 ├── 4. Сохранить user-сообщение в БД (INSERT)
 ├── 5. Сформировать messages[] для LLM:
@@ -289,10 +349,12 @@ POST /api/chats/:chatId/messages/stream
 │        const delta = chunk.choices[0]?.delta?.content ?? ''
 │        if (delta) writeSSE({ type: 'delta', delta }); fullContent += delta;
 │      }
-├── 9. INSERT assistant-сообщения в БД, UPDATE chats.updated_at = now.
-├── 10. Авто-заголовок (только если до этого запроса в чате не было user-сообщений):
-│       title = первые 50 символов user.content (trim, переводы строк → пробел).
-│       UPDATE chats.title = title.
+├── 9. INSERT assistant-сообщения в БД, UPDATE chats SET updated_at=datetime('now').
+│      (updated_at обновляется после стрима — чат поднимается в сайдбаре по завершении ответа)
+├── 10. Авто-заголовок (только если userMessagesBefore === 0, т.е. это первый user-запрос):
+│       text = user.content.trim().replace(/\s+/g, ' ')
+│       Обрезать по последнему пробелу до 50 символов, добавить '…'
+│       UPDATE chats SET title=title, updated_at=datetime('now').
 ├── 11. writeSSE({ type: 'done', fullContent, assistantMessageId, chatTitle? }).
 └── 12. reply.raw.end().
 
@@ -326,7 +388,7 @@ server/
 │   │   └── messages.ts       # GET history + POST stream
 │   ├── services/
 │   │   └── llm.ts            # OpenAI-клиент + streamChat(messages[])
-│   └── types.ts              # Chat, Message, SSEEvent
+│   └── types.ts              # re-export из shared/types.ts
 ├── data/                     # .gitignore: db.sqlite3
 ├── package.json
 └── tsconfig.json
@@ -356,7 +418,13 @@ server/
 
 > Никакого `drizzle-kit` — миграция одной командой `db.exec(...)` при старте.
 
-**`tsconfig.json`:** `"module": "NodeNext"`, `"target": "ES2022"`, `"strict": true`.
+**`tsconfig.json`:** `"module": "NodeNext"`, `"target": "ES2022"`, `"strict": true`, `"paths": { "@shared/*": ["../shared/*"] }`.
+
+> **`dotenv`:** `dotenv.config()` вызывается только при `NODE_ENV !== 'production'` — в production переменные проставляет systemd `EnvironmentFile`.
+
+> **Логирование:** Fastify logger включён (`logger: { level: 'info' }` в prod, `'debug'` в dev). Ошибки Yandex API логируются с телом ответа перед маппингом в SSE `error`.
+
+> **`package-lock.json`** коммитится в репо.
 
 **Скрипты `package.json`:**
 
@@ -395,7 +463,7 @@ client/
 │   ├── services/
 │   │   ├── api.ts                # fetch-обёртка (VITE_API_URL + Bearer)
 │   │   └── stream.ts             # SSE-парсер через ReadableStream
-│   ├── types.ts                  # Chat, Message, SSEEvent
+│   ├── types.ts                  # re-export из shared/types.ts
 │   └── styles.css                # минимум глобальных стилей
 ├── index.html
 ├── vite.config.ts
@@ -413,7 +481,7 @@ client/
     "react-router-dom": "^6",
     "zustand": "^5",
     "@gravity-ui/uikit": "^7",
-    "@gravity-ui/aikit": "^1.17"
+    "@gravity-ui/aikit": "~1.17"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4",
@@ -429,7 +497,7 @@ client/
 
 ## 9. Компоненты фронта и маппинг AIKit
 
-> Версия `@gravity-ui/aikit ^1.17` — все компоненты ниже **проверены в исходниках пакета** (`build/esm/components/` после `npm i`).
+> Версия `@gravity-ui/aikit ~1.17` — все компоненты ниже **проверены в исходниках пакета** (`build/esm/components/` после `npm i`). Используется `~` (patch-диапазон) — миноры могут изменить API компонентов.
 
 | Блок                            | Компонент (импорт)                           | Поведение                                                  |
 | ------------------------------- | -------------------------------------------- | ---------------------------------------------------------- |
@@ -444,7 +512,7 @@ client/
 | Пустое состояние                | `EmptyContainer` (`@gravity-ui/aikit`)       | Показывается на `/chat` без активного чата                 |
 | Подсказки на пустом экране      | `Suggestions` (`@gravity-ui/aikit`)          | Perplexity-стайл квик-старт промпты (3-4 шт. захардкожены) |
 | Стриминг / thinking-плейсхолдер | `ThinkingMessage` (`@gravity-ui/aikit`)      | Видим, пока `streamStore.streaming === true`               |
-| Markdown-рендер                 | `MarkdownRenderer` (`@gravity-ui/aikit`)     | Используется внутри `AssistantMessage`                     |
+| Markdown-рендер                 | `MarkdownRenderer` (`@gravity-ui/aikit`)     | Внутри `AssistantMessage`. **Raw HTML отключён** — при интеграции проверить, что рендерер не пропускает `<script>`/inline-обработчики; при необходимости добавить DOMPurify |
 | Логин-форма                     | `TextInput` + `Button` (`@gravity-ui/uikit`) | POST `/api/auth/verify` → `setToken`                       |
 
 > Если `History` не поддерживает inline-rename — используем `Dialog` (uikit) с `TextInput` для редактирования. Решение откладываем до интеграции — посмотрим API живьём.
@@ -462,6 +530,7 @@ interface AuthStore {
   clearToken: () => void;
 }
 // persist: localStorage ключ 'auth-token'
+// При получении HTTP 401 от любого API-вызова → clearToken() + redirect /login
 ```
 
 ### `useChatStore` (`stores/chatStore.ts`)
@@ -517,7 +586,10 @@ interface ThemeStore {
 // 5. delta → callbacks.onDelta(delta)
 // 6. done  → callbacks.onDone(fullContent, assistantMessageId, chatTitle?)
 // 7. error → callbacks.onError(code, message)
-// 8. response.ok === false (HTTP 401/500) → onError('server', 'Network error')
+// 8. response.ok === false перед открытием стрима:
+//    401 → onError('auth', 'Unauthorized')
+//    404 → onError('server', 'Chat not found')
+//    прочее → onError('server', 'Network error')
 ```
 
 Прерывание со стороны клиента (Stop) **в MVP не реализуется** — кнопки нет, `AbortController` не пробрасывается.
@@ -535,7 +607,12 @@ interface ThemeStore {
 
 /chat/:chatId  → ChatPage с активным чатом
                  Guard: если нет token → redirect /login
+                 Если chatId не существует (GET messages → 404) → redirect /chat
 ```
+
+**UX-поведение:**
+- Удаление активного чата → `DELETE` → redirect `/chat`, `activeChat = null`.
+- Перезагрузка страницы во время стрима: клиент разрывает fetch, бэк дописывает ответ до конца и сохраняет в БД. При следующем `GET /messages` пользователь увидит полный ответ.
 
 ---
 
@@ -556,6 +633,12 @@ server {
 
     ssl_certificate     /etc/letsencrypt/live/dexity.mvladt.ru/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/dexity.mvladt.ru/privkey.pem;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header X-Frame-Options           "DENY" always;
+    add_header Content-Security-Policy   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" always;
 
     # Фронт (собранный dist, отдаётся статикой)
     location / {
@@ -613,7 +696,9 @@ sudo journalctl -u dexity-server -f   # логи
 
 ### 13.3. CORS
 
-`@fastify/cors` подключается **только в dev** (`NODE_ENV !== 'production'`) с `origin = process.env.CORS_ORIGIN` (`http://localhost:5173`). На проде Nginx раздаёт фронт и API с одного домена — CORS не нужен.
+`@fastify/cors` подключается **только в dev** (`NODE_ENV !== 'production'`) с `origin = process.env.CORS_ORIGIN`. На проде Nginx раздаёт фронт и API с одного домена — CORS не нужен.
+
+`CORS_ORIGIN` обязателен в dev и валидируется в `config.ts` через Zod (`z.string().url()`). В production переменная игнорируется.
 
 ---
 
@@ -629,23 +714,27 @@ sudo journalctl -u dexity-server -f   # логи
 - LLM-генерация заголовка чата (в MVP — обрезка первого сообщения по 50 символов)
 - Учёт токенов в истории (в MVP — окно последних 20 сообщений)
 - CI/CD (деплой вручную: `git pull && npm run build && systemctl restart dexity-server`)
+- SSE reconnect / `Last-Event-ID`
+- Синхронизация между вкладками (multi-tab)
+- Тесты (unit / e2e)
 
 ---
 
 ## 15. Порядок реализации (после подтверждения)
 
-1. `server/` — `package.json`, `tsconfig.json`, `config.ts`, `db/{client,schema,migrate}.ts`
-2. `server/plugins/auth.ts` + `routes/auth.ts`
-3. `server/routes/chats.ts` — CRUD
-4. `server/services/llm.ts` + `routes/messages.ts` — стриминг + авто-заголовок
-5. **Smoke-тест бэка через `curl`** (логин, создать чат, отправить сообщение, прочитать SSE)
-6. `client/` — `package.json`, `vite.config.ts`, bootstrap (`main.tsx`, `App.tsx`)
-7. `client/stores/` — все четыре стора
-8. `client/services/{api,stream}.ts`
-9. `client/pages/LoginPage.tsx` + Guard
-10. `client/pages/ChatPage.tsx` + `components/{ChatSidebar,ChatStream,ThemeSwitcher}.tsx`
-11. **Smoke-тест в браузере** (полный цикл)
-12. `nginx/dexity.conf` + `deploy/dexity-server.service` + README по деплою
+1. `shared/types.ts` — единый файл общих типов
+2. `server/` — `package.json`, `tsconfig.json`, `config.ts`, `db/{client,schema,migrate}.ts`
+3. `server/plugins/auth.ts` + `routes/auth.ts`
+4. `server/routes/chats.ts` — CRUD
+5. `server/services/llm.ts` + `routes/messages.ts` — стриминг + авто-заголовок
+6. **Smoke-тест бэка через `curl`** (логин, создать чат, отправить сообщение, прочитать SSE)
+7. `client/` — `package.json`, `vite.config.ts`, bootstrap (`main.tsx`, `App.tsx`)
+8. `client/stores/` — все четыре стора
+9. `client/services/{api,stream}.ts`
+10. `client/pages/LoginPage.tsx` + Guard
+11. `client/pages/ChatPage.tsx` + `components/{ChatSidebar,ChatStream,ThemeSwitcher}.tsx`
+12. **Smoke-тест в браузере** (полный цикл)
+13. `nginx/dexity.conf` + `deploy/dexity-server.service` + README по деплою
 
 ---
 

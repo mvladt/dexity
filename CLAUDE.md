@@ -24,7 +24,7 @@ dexity/
 
 - **Model ID** формируется на бэке: `` `gpt://${YANDEX_FOLDER_ID}/${MODEL_ID}/latest` ``
 - **Drizzle** — только как query builder (типобезопасные select/insert/update). Без `drizzle-kit`, без CLI-миграций. Миграция — один `db.exec(...)` при старте (`server/src/db/migrate.ts`)
-- **Стриминг** — SSE: бэк проксирует поток от Yandex, фронт читает через `EventSource`
+- **Стриминг** — SSE: бэк проксирует поток от Yandex, фронт читает через `fetch` + `ReadableStream` (не `EventSource` — не поддерживает POST и `Authorization`)
 - **Контекст LLM** — бэк загружает полную историю из SQLite и передаёт в `messages[]` при каждом запросе
 - **Аутентификация** — единый `ACCESS_TOKEN` в `.env`; `Authorization: Bearer <token>`
 
@@ -49,3 +49,7 @@ cd client && npm run dev
 ## Спецификация
 
 Полное описание API, схемы БД, TypeScript-интерфейсов, Zustand-сторов, Nginx — в `dexity-spec.md`.
+
+## Контекст сессий
+
+После каждой рабочей сессии обновляй `CONTEXT.md`: что сделано, текущее состояние проекта, следующий шаг. Это позволяет быстро восстановить контекст в начале новой сессии.
