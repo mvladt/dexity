@@ -38,6 +38,7 @@ export function LoginPage() {
           placeholder="Токен доступа"
           size="l"
           disabled={loading}
+          autoComplete="current-password"
           autoFocus
         />
         {error && <Text color="danger">{error}</Text>}
