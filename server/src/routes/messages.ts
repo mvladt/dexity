@@ -4,6 +4,7 @@ import { eq, asc, desc, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
 import { streamChat } from '../services/llm.js';
+import { config } from '../config.js';
 
 const chatIdSchema = z.coerce.number().int().positive();
 const streamBodySchema = z.object({ content: z.string().min(1).max(10_000) });
@@ -81,6 +82,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': config.CORS_ORIGIN ?? '*',
     });
 
     // Keep-alive ping every 15s
