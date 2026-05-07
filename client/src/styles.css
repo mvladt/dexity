@@ -30,7 +30,7 @@ body,
 
 .chat-layout {
   display: flex;
-  height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background: var(--g-color-base-background);
 }
