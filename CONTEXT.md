@@ -1,35 +1,32 @@
 # Context
 
-Последнее обновление: 2026-05-07 12:10
+Последнее обновление: 2026-05-07 14:30
 
 ## Что было сделано
 
 - Проведено SDD-ревью `docs/dexity-spec.md` — найдено 5 критических проблем и 7 существенных замечаний
-- Исправлена спека по результатам ревью:
-  - `shared/types.ts` — единый источник типов вместо копипасты
-  - Zod-валидация всех входов + `bodyLimit`
-  - SSE-контракт: ошибки до открытия стрима, keep-alive пинги, уточнение `fetch` vs `EventSource`
-  - Безопасность: CSP-заголовки в Nginx, принятый риск `localStorage` задокументирован, `MarkdownRenderer` без raw HTML
-  - Контекстное окно: фикс broken pairs, `userMessagesBefore` захватывается до INSERT
-  - Авто-заголовок: обрезка по последнему пробелу + `'…'`
-  - `INSERT OR IGNORE INTO users (id) VALUES (1)` в миграции
-  - Составной индекс `(chat_id, created_at)`
-  - Логирование, `dotenv` только в dev, `package-lock.json` коммитится
-  - UX: поведение при удалении активного чата, несуществующем `chatId`, F5 во время стрима
-  - Авто-логаут на 401 в `useAuthStore`
-- Добавлен §15 «Пользовательские сценарии» — 20 сценариев по группам (auth, чаты, стриминг, навигация, контекст)
-- Исправлен `CLAUDE.md`: `EventSource` → `fetch + ReadableStream`, добавлено правило вести `CONTEXT.md`
-- Реорганизована структура спек: единый `docs/dexity-spec.md` разбит на три файла рядом с кодом
+- Исправлена спека по результатам ревью (см. предыдущие записи)
+- Реорганизована структура спек: `specs/overview.md`, `server/specs/backend.md`, `client/specs/frontend.md`
+- **Написан весь код MVP:**
+  - `shared/types.ts` — общие типы Chat, Message, SSEEvent
+  - Бэкенд: config, DB (schema + migrate), auth plugin, routes (auth/chats/messages), LLM-сервис, точка входа
+  - Фронтенд: все сторы (auth/chat/stream/theme), сервисы (api/stream), компоненты (ChatSidebar/ChatStream/ThemeSwitcher), страницы (LoginPage/ChatPage), App + роутинг
+  - Деплой: nginx.conf, systemd unit, README
 
 ## Текущее состояние
 
-Проект на стадии **документации и спецификации**. Код (`client/`, `server/`) ещё не написан.
+Код полностью написан, TypeScript компилируется без ошибок (оба проекта).
+Vite production build проходит.
 
-Спецификация разбита на три файла:
-- `specs/overview.md` — обзор, общие типы, пользовательские сценарии
-- `server/specs/backend.md` — API, схема БД, поток стриминга, деплой
-- `client/specs/frontend.md` — компоненты, Zustand-сторы, SSE-парсер, роутинг
+Остались только smoke-тесты (шаги 6 и 12 плана):
+- Шаг 6: curl-тест бэкенда (нужен `.env` с реальными ключами Yandex)
+- Шаг 12: тест в браузере (нужно запустить оба сервера)
 
 ## Следующий шаг
 
-Начать реализацию — стартовать с `shared/types.ts`, затем бэкенд (`server/`).
+Настроить `.env` для сервера и провести smoke-тест:
+```bash
+cd server && cp .env.example .env  # заполнить ключи
+npm run dev
+```
+Затем тест в браузере (`cd client && npm run dev`).

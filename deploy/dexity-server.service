@@ -1,0 +1,17 @@
+[Unit]
+Description=AI Chat backend (Fastify)
+After=network.target
+
+[Service]
+Type=simple
+User=dexity
+WorkingDirectory=/var/www/dexity/server
+EnvironmentFile=/var/www/dexity/server/.env
+ExecStart=/usr/bin/node dist/server/src/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

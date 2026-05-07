@@ -1,0 +1,78 @@
+import type { SSEEvent } from '../types';
+import { useAuthStore } from '../stores/authStore';
+
+const BASE = import.meta.env.VITE_API_URL ?? '';
+
+interface StreamCallbacks {
+  onDelta: (delta: string) => void;
+  onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
+  onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
+}
+
+export async function streamMessages(
+  chatId: number,
+  content: string,
+  callbacks: StreamCallbacks,
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/chats/${chatId}/messages/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ content }),
+    });
+  } catch {
+    callbacks.onError('server', 'Сервис недоступен, попробуйте позже');
+    return;
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      useAuthStore.getState().clearToken();
+      window.location.href = '/login';
+      callbacks.onError('auth', 'Unauthorized');
+    } else if (res.status === 404) {
+      callbacks.onError('server', 'Chat not found');
+    } else {
+      callbacks.onError('server', 'Network error');
+    }
+    return;
+  }
+
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buf += value;
+    const blocks = buf.split('\n\n');
+    buf = blocks.pop() ?? '';
+
+    for (const block of blocks) {
+      for (const line of block.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        let event: SSEEvent;
+        try {
+          event = JSON.parse(line.slice(6)) as SSEEvent;
+        } catch {
+          continue;
+        }
+
+        if (event.type === 'delta') {
+          callbacks.onDelta(event.delta);
+        } else if (event.type === 'done') {
+          callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
+        } else if (event.type === 'error') {
+          callbacks.onError(event.code, event.message);
+        }
+      }
+    }
+  }
+}
