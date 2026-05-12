@@ -2,9 +2,10 @@ import { useAuthStore } from '../stores/authStore';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
-function getHeaders(): HeadersInit {
+function getHeaders(withContentType = true): HeadersInit {
   const token = useAuthStore.getState().token;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
+  if (withContentType) headers['Content-Type'] = 'application/json';
   if (token) headers['Authorization'] = `Bearer ${token}`;
   return headers;
 }
@@ -24,7 +25,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   get: <T>(path: string) =>
-    fetch(`${BASE}${path}`, { headers: getHeaders() }).then((r) => handleResponse<T>(r)),
+    fetch(`${BASE}${path}`, { headers: getHeaders(false) }).then((r) => handleResponse<T>(r)),
 
   post: <T>(path: string, body: unknown) =>
     fetch(`${BASE}${path}`, {
@@ -41,7 +42,7 @@ export const api = {
     }).then((r) => handleResponse<T>(r)),
 
   delete: <T>(path: string) =>
-    fetch(`${BASE}${path}`, { method: 'DELETE', headers: getHeaders() }).then((r) =>
+    fetch(`${BASE}${path}`, { method: 'DELETE', headers: getHeaders(false) }).then((r) =>
       handleResponse<T>(r),
     ),
 };
