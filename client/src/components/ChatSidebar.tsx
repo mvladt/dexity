@@ -59,7 +59,8 @@ export function ChatSidebar() {
           onSelectChat={handleSelect}
           onDeleteChat={handleDelete}
           showActions
-          groupBy="none"
+          searchable
+          groupBy="date"
         />
       </div>
 

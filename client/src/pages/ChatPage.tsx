@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { EmptyContainer, PromptInput } from '@gravity-ui/aikit';
+import { Disclaimer, EmptyContainer, PromptInput } from '@gravity-ui/aikit';
 import type { Suggestion, TSubmitData } from '@gravity-ui/aikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
@@ -111,6 +111,7 @@ export function ChatPage() {
                 bodyProps={{ placeholder: 'Напишите сообщение…' }}
                 view="simple"
               />
+              <Disclaimer text="AI может ошибаться, проверяйте важное." />
             </div>
           </div>
         )}

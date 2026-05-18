@@ -1,4 +1,4 @@
-import { MessageList, PromptInput } from '@gravity-ui/aikit';
+import { Disclaimer, MessageList, PromptInput } from '@gravity-ui/aikit';
 import type { TChatMessage, TSubmitData } from '@gravity-ui/aikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
@@ -53,6 +53,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           view="simple"
           bodyProps={{ placeholder: 'Напишите сообщение…' }}
         />
+        <Disclaimer text="AI может ошибаться, проверяйте важное." />
       </div>
     </div>
   );
