@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { streamMessages } from '../services/stream';
 import { useChatStore } from './chatStore';
+import { useSettingsStore } from './settingsStore';
 
 interface StreamStore {
   streaming: boolean;
@@ -31,8 +32,11 @@ export const useStreamStore = create<StreamStore>()((set) => ({
     set({ streaming: true, partialContent: '', error: null });
     const { appendMessage, patchChatTitle } = useChatStore.getState();
 
+    const model = useSettingsStore.getState().model;
+
     await streamMessages(chatId, content, {
       signal: abortController.signal,
+      model,
 
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 

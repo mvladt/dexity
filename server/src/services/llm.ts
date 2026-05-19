@@ -6,10 +6,17 @@ const client = new OpenAI({
   apiKey: config.YANDEX_API_KEY,
 });
 
-const model = `gpt://${config.YANDEX_FOLDER_ID}/${config.MODEL_ID}/latest`;
-
 export type LLMMessage = { role: 'user' | 'assistant'; content: string };
 
-export async function streamChat(messages: LLMMessage[], signal?: AbortSignal) {
-  return client.chat.completions.create({ model, messages, stream: true }, { signal });
+export async function streamChat(
+  messages: LLMMessage[],
+  signal?: AbortSignal,
+  model?: string,
+) {
+  const modelId = model ?? config.MODEL_ID;
+  const fullModel = `gpt://${config.YANDEX_FOLDER_ID}/${modelId}/latest`;
+  return client.chat.completions.create(
+    { model: fullModel, messages, stream: true },
+    { signal },
+  );
 }

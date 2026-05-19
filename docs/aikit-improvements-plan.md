@@ -16,11 +16,11 @@
 
 ## Средние улучшения
 
-- [x] 8. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone. _Сделано вместе с #9: переключил `ChatStream` на `view="full"`, чтобы наполнить хедер `ContextIndicator`. Empty-state `ChatPage` оставил на `simple` — там контекста нет, показывать нечего._
-- [x] 9. **`ContextIndicator` (% контекста)** — бэк льёт всю историю в `messages[]` каждый раз (CLAUDE.md). Рано или поздно упрётся в лимит токенов. Показывать процент окна. _Сделано: оценка `chars / 3` (BPE YandexGPT по кириллице), окно `last 20` (как на бэке), `MAX_CONTEXT_TOKENS = 8000` (yandexgpt-lite/yandexgpt). Когда появится выбор модели (#12), MAX станет динамическим._
+- [ ] 8. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone. _Отложено: `view="full"` без footer-элементов смотрится коряво (одинокий ContextIndicator + изолированная submit-кнопка). Имеет смысл, когда подвезём #17 (attachments) или вернёмся к идее settings-меню. ContextIndicator используем отдельно, без `view="full"`._
+- [x] 9. **`ContextIndicator` (% контекста)** — бэк льёт всю историю в `messages[]` каждый раз (CLAUDE.md). Рано или поздно упрётся в лимит токенов. Показывать процент окна. _Сделано: оценка `chars / 3` (BPE YandexGPT по кириллице), окно `last 20` (как на бэке). MAX_CONTEXT — динамический, зависит от выбранной модели (#12). Размещён в отдельном ряду под инпутом, рядом с Disclaimer._
 - [ ] 10. **`FeedbackForm` + `RatingBlock`** — thumbs up/down + причина + комментарий. Логировать в SQLite в отдельную таблицу.
 - [ ] 11. **`ThinkingMessage`** — collapsible «думаю…» до первого токена стрима (TTFB Yandex 2-3 сек, UI кажется висящим).
-- [ ] 12. **Выбор модели в footer’е** — селект `yandexgpt-lite` / `yandexgpt` / `yandexgpt-32k` / `llama`, передавать в `/api/stream`. Сейчас — хардкод через `MODEL_ID`.
+- [x] 12. **Выбор модели в footer’е** — селект `yandexgpt-lite` / `yandexgpt` / `yandexgpt-32k` / `llama`, передавать в `/api/stream`. Сейчас — хардкод через `MODEL_ID`. _Сделано: Zustand-стор `settingsStore` + Select из `@gravity-ui/uikit` + проброс `model` в `/api/stream`. Список моделей — статический в `client/src/models.ts`. MODEL_ID в .env остаётся fallback'ом, если фронт ничего не пришлёт._
 - [ ] 13. **Системный промпт / роль на чат** — поле `system_prompt` у `chats` + редактор в шапке. Бэк подмешивает в начало `messages[]`. Дёшево и резко повышает полезность.
 - [ ] 14. **Экспорт чата в Markdown** — кнопка в шапке/контекстном меню, генерация `.md` на фронте из `messages`.
 - [ ] 15. **`History` (popup) как альтернатива сайдбару** — шаблон с поиском, группировкой, пагинацией. На мобильных удобнее, чем сайдбар.

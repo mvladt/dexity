@@ -8,6 +8,7 @@ interface StreamCallbacks {
   onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
   signal?: AbortSignal;
+  model?: string;
 }
 
 export async function streamMessages(
@@ -26,7 +27,10 @@ export async function streamMessages(
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        ...(callbacks.model ? { model: callbacks.model } : {}),
+      }),
       signal,
     });
   } catch {

@@ -2,8 +2,11 @@ import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Disclaimer, EmptyContainer, PromptInput } from '@gravity-ui/aikit';
 import type { Suggestion, TSubmitData } from '@gravity-ui/aikit';
+import { Select } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { MODELS } from '../models';
 import { ChatSidebar } from '../components/ChatSidebar';
 import { ChatStream } from '../components/ChatStream';
 import { ThemeSwitcher } from '../components/ThemeSwitcher';
@@ -21,6 +24,8 @@ export function ChatPage() {
   const { chats, activeChat, fetchChats, setActive, fetchMessages, createChat, appendMessage } =
     useChatStore();
   const startStream = useStreamStore((s) => s.startStream);
+  const model = useSettingsStore((s) => s.model);
+  const setModel = useSettingsStore((s) => s.setModel);
 
   // Load chats on mount
   useEffect(() => {
@@ -111,7 +116,16 @@ export function ChatPage() {
                 bodyProps={{ placeholder: 'Напишите сообщение…' }}
                 view="simple"
               />
-              <Disclaimer text="AI может ошибаться, проверяйте важное." />
+              <div className="chat-input-footer">
+                <Select
+                  size="s"
+                  value={[model]}
+                  onUpdate={(vals) => setModel(vals[0])}
+                  options={MODELS.map((m) => ({ value: m.id, content: m.label }))}
+                />
+                <Disclaimer text="AI может ошибаться, проверяйте важное." />
+                <span />
+              </div>
             </div>
           </div>
         )}

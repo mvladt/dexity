@@ -1,7 +1,10 @@
-import { Disclaimer, MessageList, PromptInput } from '@gravity-ui/aikit';
+import { ContextIndicator, Disclaimer, MessageList, PromptInput } from '@gravity-ui/aikit';
 import type { TAssistantMessage, TChatMessage, TSubmitData } from '@gravity-ui/aikit';
+import { Select } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { MODELS, getModel } from '../models';
 import type { Message } from '../types';
 
 function toAikitMessage(msg: Message): TChatMessage {
@@ -21,10 +24,6 @@ const assistantActions = [
     },
   },
 ];
-
-// Контекст модели. Дефолт совпадает с yandexgpt-lite/yandexgpt (~8K).
-// Когда появится выбор модели (#12) — станет динамическим.
-const MAX_CONTEXT_TOKENS = 8000;
 
 // Бэк льёт в LLM только последние 20 сообщений.
 const HISTORY_WINDOW = 20;
@@ -46,6 +45,8 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const startStream = useStreamStore((s) => s.startStream);
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
+  const model = useSettingsStore((s) => s.model);
+  const setModel = useSettingsStore((s) => s.setModel);
 
   const displayMessages: TChatMessage[] = [
     ...messages.map(toAikitMessage),
@@ -54,6 +55,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       : []),
   ];
 
+  const maxContext = getModel(model).maxContext;
   const usedTokens = messages
     .slice(-HISTORY_WINDOW)
     .reduce((sum, m) => sum + estimateTokens(m.content), 0);
@@ -84,19 +86,25 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           onSend={handleSend}
           onCancel={async () => cancel()}
           status={streaming ? 'streaming' : 'ready'}
-          view="full"
+          view="simple"
           bodyProps={{ placeholder: 'Напишите сообщение…' }}
-          headerProps={{
-            showContextIndicator: true,
-            contextIndicatorProps: {
-              type: 'number',
-              usedContext: usedTokens,
-              maxContext: MAX_CONTEXT_TOKENS,
-              tooltipContent: `Использовано ~${usedTokens} из ${MAX_CONTEXT_TOKENS} токенов (оценка по последним ${HISTORY_WINDOW} сообщениям)`,
-            },
-          }}
         />
-        <Disclaimer text="AI может ошибаться, проверяйте важное." />
+        <div className="chat-input-footer">
+          <Select
+            size="s"
+            value={[model]}
+            onUpdate={(vals) => setModel(vals[0])}
+            options={MODELS.map((m) => ({ value: m.id, content: m.label }))}
+            disabled={streaming}
+          />
+          <Disclaimer text="AI может ошибаться, проверяйте важное." />
+          <ContextIndicator
+            type="number"
+            usedContext={usedTokens}
+            maxContext={maxContext}
+            tooltipContent={`Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним ${HISTORY_WINDOW} сообщениям)`}
+          />
+        </div>
       </div>
     </div>
   );

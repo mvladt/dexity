@@ -7,7 +7,10 @@ import { streamChat } from '../services/llm.js';
 import { config } from '../config.js';
 
 const chatIdSchema = z.coerce.number().int().positive();
-const streamBodySchema = z.object({ content: z.string().min(1).max(10_000) });
+const streamBodySchema = z.object({
+  content: z.string().min(1).max(10_000),
+  model: z.string().optional(),
+});
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -44,6 +47,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const bodyResult = streamBodySchema.safeParse(request.body);
     if (!bodyResult.success) return reply.status(400).send({ error: 'Invalid request' });
     const userContent = bodyResult.data.content;
+    const modelOverride = bodyResult.data.model;
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
@@ -97,7 +101,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let fullContent = '';
 
     try {
-      const stream = await streamChat(llmMessages, abort.signal);
+      const stream = await streamChat(llmMessages, abort.signal, modelOverride);
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content ?? '';
