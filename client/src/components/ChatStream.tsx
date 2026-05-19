@@ -22,6 +22,18 @@ const assistantActions = [
   },
 ];
 
+// Контекст модели. Дефолт совпадает с yandexgpt-lite/yandexgpt (~8K).
+// Когда появится выбор модели (#12) — станет динамическим.
+const MAX_CONTEXT_TOKENS = 8000;
+
+// Бэк льёт в LLM только последние 20 сообщений.
+const HISTORY_WINDOW = 20;
+
+// Грубая оценка: для кириллицы YandexGPT BPE даёт ~1 токен на 2–3 символа.
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3);
+}
+
 interface Props {
   chatId: number;
   onUserMessage: (content: string) => void;
@@ -41,6 +53,10 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       ? [{ role: 'assistant' as const, content: partialContent, id: '__streaming__' }]
       : []),
   ];
+
+  const usedTokens = messages
+    .slice(-HISTORY_WINDOW)
+    .reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
   const handleSend = async (data: TSubmitData) => {
     if (!data.content.trim() || streaming) return;
@@ -68,8 +84,17 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           onSend={handleSend}
           onCancel={async () => cancel()}
           status={streaming ? 'streaming' : 'ready'}
-          view="simple"
+          view="full"
           bodyProps={{ placeholder: 'Напишите сообщение…' }}
+          headerProps={{
+            showContextIndicator: true,
+            contextIndicatorProps: {
+              type: 'number',
+              usedContext: usedTokens,
+              maxContext: MAX_CONTEXT_TOKENS,
+              tooltipContent: `Использовано ~${usedTokens} из ${MAX_CONTEXT_TOKENS} токенов (оценка по последним ${HISTORY_WINDOW} сообщениям)`,
+            },
+          }}
         />
         <Disclaimer text="AI может ошибаться, проверяйте важное." />
       </div>

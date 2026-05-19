@@ -16,8 +16,8 @@
 
 ## Средние улучшения
 
-- [ ] 8. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone.
-- [ ] 9. **`ContextIndicator` (% контекста)** — бэк льёт всю историю в `messages[]` каждый раз (CLAUDE.md). Рано или поздно упрётся в лимит токенов. Показывать процент окна.
+- [x] 8. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone. _Сделано вместе с #9: переключил `ChatStream` на `view="full"`, чтобы наполнить хедер `ContextIndicator`. Empty-state `ChatPage` оставил на `simple` — там контекста нет, показывать нечего._
+- [x] 9. **`ContextIndicator` (% контекста)** — бэк льёт всю историю в `messages[]` каждый раз (CLAUDE.md). Рано или поздно упрётся в лимит токенов. Показывать процент окна. _Сделано: оценка `chars / 3` (BPE YandexGPT по кириллице), окно `last 20` (как на бэке), `MAX_CONTEXT_TOKENS = 8000` (yandexgpt-lite/yandexgpt). Когда появится выбор модели (#12), MAX станет динамическим._
 - [ ] 10. **`FeedbackForm` + `RatingBlock`** — thumbs up/down + причина + комментарий. Логировать в SQLite в отдельную таблицу.
 - [ ] 11. **`ThinkingMessage`** — collapsible «думаю…» до первого токена стрима (TTFB Yandex 2-3 сек, UI кажется висящим).
 - [ ] 12. **Выбор модели в footer’е** — селект `yandexgpt-lite` / `yandexgpt` / `yandexgpt-32k` / `llama`, передавать в `/api/stream`. Сейчас — хардкод через `MODEL_ID`.
