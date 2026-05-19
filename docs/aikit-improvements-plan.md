@@ -6,13 +6,13 @@
 
 ## Quick wins (≤ полчаса каждый)
 
-- [ ] 1. **Действия на сообщениях** — `BaseMessage`/`MessageList` поддерживают `actions` (`copy`, `edit`, `delete`, `regenerate`) с `showActionsOnHover`. Минимум: `copy` на ассистенте, `edit`/`delete` на юзере. Сейчас действий нет вообще.
+- [x] 1. **Действия на сообщениях** — `BaseMessage`/`MessageList` поддерживают `actions` (`copy`, `edit`, `delete`, `regenerate`) с `showActionsOnHover`. Минимум: `copy` на ассистенте, `edit`/`delete` на юзере. Сейчас действий нет вообще. _Сделано: copy на ассистенте + showActionsOnHover._
 - [ ] 2. **Stop / Cancel стриминга** — `SubmitButton` переключается send ↔ cancel; `PromptInput` принимает `onCancel`. Прокинуть в `streamStore.cancel()`.
 - [ ] 3. **Регенерация последнего ответа** — `action.regenerate` на ассистенте → `startStream` с теми же messages, минус последний.
 - [x] 4. **Группировка чатов по дате** — заменить `groupBy="none"` на `groupBy="date"` в `ChatSidebar` → автоматом «Сегодня / Вчера / N дней назад».
 - [x] 5. **Поиск по чатам** — `searchable` у `HistoryList`. Без него при 50+ чатах сайдбар бесполезен.
 - [x] 6. **`Disclaimer` под инпутом** — «AI может ошибаться, проверяйте важное».
-- [ ] 7. **Timestamp на сообщениях** — `showTimestamp` у `BaseMessage`.
+- [x] 7. **Timestamp на сообщениях** — `showTimestamp` у `BaseMessage`.
 
 ## Средние улучшения
 
