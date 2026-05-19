@@ -7,6 +7,7 @@ interface StreamCallbacks {
   onDelta: (delta: string) => void;
   onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
+  signal?: AbortSignal;
 }
 
 export async function streamMessages(
@@ -15,6 +16,7 @@ export async function streamMessages(
   callbacks: StreamCallbacks,
 ): Promise<void> {
   const token = useAuthStore.getState().token;
+  const signal = callbacks.signal;
 
   let res: Response;
   try {
@@ -25,8 +27,10 @@ export async function streamMessages(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ content }),
+      signal,
     });
   } catch {
+    if (signal?.aborted) return;
     callbacks.onError('server', 'Сервис недоступен, попробуйте позже');
     return;
   }
@@ -47,32 +51,37 @@ export async function streamMessages(
   const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
   let buf = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buf += value;
-    const blocks = buf.split('\n\n');
-    buf = blocks.pop() ?? '';
+      buf += value;
+      const blocks = buf.split('\n\n');
+      buf = blocks.pop() ?? '';
 
-    for (const block of blocks) {
-      for (const line of block.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        let event: SSEEvent;
-        try {
-          event = JSON.parse(line.slice(6)) as SSEEvent;
-        } catch {
-          continue;
-        }
+      for (const block of blocks) {
+        for (const line of block.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          let event: SSEEvent;
+          try {
+            event = JSON.parse(line.slice(6)) as SSEEvent;
+          } catch {
+            continue;
+          }
 
-        if (event.type === 'delta') {
-          callbacks.onDelta(event.delta);
-        } else if (event.type === 'done') {
-          callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
-        } else if (event.type === 'error') {
-          callbacks.onError(event.code, event.message);
+          if (event.type === 'delta') {
+            callbacks.onDelta(event.delta);
+          } else if (event.type === 'done') {
+            callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
+          } else if (event.type === 'error') {
+            callbacks.onError(event.code, event.message);
+          }
         }
       }
     }
+  } catch {
+    if (signal?.aborted) return;
+    callbacks.onError('server', 'Соединение прервано');
   }
 }

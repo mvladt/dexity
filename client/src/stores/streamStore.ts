@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import type { SSEEvent } from '../types';
 import { streamMessages } from '../services/stream';
 import { useChatStore } from './chatStore';
 
@@ -8,8 +7,11 @@ interface StreamStore {
   partialContent: string;
   error: { code: 'auth' | 'quota' | 'server'; message: string } | null;
   startStream: (chatId: number, content: string) => Promise<void>;
+  cancel: () => void;
   clearError: () => void;
 }
+
+let abortController: AbortController | null = null;
 
 export const useStreamStore = create<StreamStore>()((set) => ({
   streaming: false,
@@ -18,11 +20,20 @@ export const useStreamStore = create<StreamStore>()((set) => ({
 
   clearError: () => set({ error: null }),
 
+  cancel: () => {
+    abortController?.abort();
+    abortController = null;
+    set({ streaming: false, partialContent: '' });
+  },
+
   startStream: async (chatId, content) => {
+    abortController = new AbortController();
     set({ streaming: true, partialContent: '', error: null });
     const { appendMessage, patchChatTitle } = useChatStore.getState();
 
     await streamMessages(chatId, content, {
+      signal: abortController.signal,
+
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 
       onDone: (fullContent, assistantMessageId, chatTitle) => {
@@ -41,5 +52,7 @@ export const useStreamStore = create<StreamStore>()((set) => ({
         set({ streaming: false, partialContent: '', error: { code, message } });
       },
     });
+
+    abortController = null;
   },
 }));

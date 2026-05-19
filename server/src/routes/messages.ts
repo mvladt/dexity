@@ -90,10 +90,14 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       reply.raw.write(': ping\n\n');
     }, 15_000);
 
+    // Abort upstream when client disconnects (stop paying Yandex tokens on cancel)
+    const abort = new AbortController();
+    request.raw.on('close', () => abort.abort());
+
     let fullContent = '';
 
     try {
-      const stream = await streamChat(llmMessages);
+      const stream = await streamChat(llmMessages, abort.signal);
 
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content ?? '';
@@ -104,6 +108,12 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       }
     } catch (err: unknown) {
       clearInterval(pingInterval);
+
+      if (abort.signal.aborted) {
+        // Client cancelled — socket already closed, just bail
+        return;
+      }
+
       request.log.error({ err }, 'Yandex API error');
 
       const status = (err as { status?: number })?.status;

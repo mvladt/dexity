@@ -32,6 +32,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const streaming = useStreamStore((s) => s.streaming);
   const partialContent = useStreamStore((s) => s.partialContent);
   const startStream = useStreamStore((s) => s.startStream);
+  const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
 
   const displayMessages: TChatMessage[] = [
@@ -65,7 +66,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       <div className="chat-input">
         <PromptInput
           onSend={handleSend}
-          disabled={streaming}
+          onCancel={async () => cancel()}
           status={streaming ? 'streaming' : 'ready'}
           view="simple"
           bodyProps={{ placeholder: 'Напишите сообщение…' }}
