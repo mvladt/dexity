@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_MODEL_ID } from '../models';
+import { DEFAULT_MODEL_ID, MODELS } from '../models';
 
 interface SettingsStore {
   model: string;
@@ -13,6 +13,13 @@ export const useSettingsStore = create<SettingsStore>()(
       model: DEFAULT_MODEL_ID,
       setModel: (model) => set({ model }),
     }),
-    { name: 'dexity-settings' },
+    {
+      name: 'dexity-settings',
+      onRehydrateStorage: () => (state) => {
+        if (state && !MODELS.some((m) => m.id === state.model)) {
+          state.model = DEFAULT_MODEL_ID;
+        }
+      },
+    },
   ),
 );
