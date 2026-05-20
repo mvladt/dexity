@@ -6,7 +6,7 @@ const client = new OpenAI({
   apiKey: config.YANDEX_API_KEY,
 });
 
-export type LLMMessage = { role: 'user' | 'assistant'; content: string };
+export type LLMMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 export async function streamChat(
   messages: LLMMessage[],

@@ -9,6 +9,7 @@ interface StreamCallbacks {
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
   signal?: AbortSignal;
   model?: string;
+  systemPrompt?: string;
 }
 
 export async function streamMessages(
@@ -30,6 +31,7 @@ export async function streamMessages(
       body: JSON.stringify({
         content,
         ...(callbacks.model ? { model: callbacks.model } : {}),
+        ...(callbacks.systemPrompt ? { systemPrompt: callbacks.systemPrompt } : {}),
       }),
       signal,
     });

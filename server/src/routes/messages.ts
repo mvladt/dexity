@@ -10,6 +10,7 @@ const chatIdSchema = z.coerce.number().int().positive();
 const streamBodySchema = z.object({
   content: z.string().min(1).max(10_000),
   model: z.string().optional(),
+  systemPrompt: z.string().max(4000).optional(),
 });
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
@@ -48,6 +49,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     if (!bodyResult.success) return reply.status(400).send({ error: 'Invalid request' });
     const userContent = bodyResult.data.content;
     const modelOverride = bodyResult.data.model;
+    const systemPrompt = bodyResult.data.systemPrompt?.trim() || undefined;
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
@@ -76,6 +78,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
     // Build LLM context
     const llmMessages = [
+      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
       ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: userContent },
     ];

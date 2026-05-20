@@ -5,6 +5,8 @@ import { DEFAULT_MODEL_ID, MODELS } from '../models';
 interface SettingsStore {
   model: string;
   setModel: (id: string) => void;
+  systemPrompt: string;
+  setSystemPrompt: (s: string) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -12,6 +14,8 @@ export const useSettingsStore = create<SettingsStore>()(
     (set) => ({
       model: DEFAULT_MODEL_ID,
       setModel: (model) => set({ model }),
+      systemPrompt: '',
+      setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
     }),
     {
       name: 'dexity-settings',

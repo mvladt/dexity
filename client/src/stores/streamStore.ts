@@ -32,11 +32,12 @@ export const useStreamStore = create<StreamStore>()((set) => ({
     set({ streaming: true, partialContent: '', error: null });
     const { appendMessage, patchChatTitle } = useChatStore.getState();
 
-    const model = useSettingsStore.getState().model;
+    const { model, systemPrompt } = useSettingsStore.getState();
 
     await streamMessages(chatId, content, {
       signal: abortController.signal,
       model,
+      systemPrompt: systemPrompt || undefined,
 
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 

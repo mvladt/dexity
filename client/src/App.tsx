@@ -4,6 +4,9 @@ import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
 import { LoginPage } from './pages/LoginPage';
 import { ChatPage } from './pages/ChatPage';
+import { HistoryPage } from './pages/HistoryPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { AppLayout } from './components/AppLayout';
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
@@ -13,7 +16,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function GuestGuard({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.token);
-  if (token) return <Navigate to="/chat" replace />;
+  if (token) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -34,22 +37,18 @@ export default function App() {
             }
           />
           <Route
-            path="/chat"
             element={
               <AuthGuard>
-                <ChatPage />
+                <AppLayout />
               </AuthGuard>
             }
-          />
-          <Route
-            path="/chat/:chatId"
-            element={
-              <AuthGuard>
-                <ChatPage />
-              </AuthGuard>
-            }
-          />
-          <Route path="*" element={<Navigate to="/chat" replace />} />
+          >
+            <Route index element={<ChatPage />} />
+            <Route path="/chat/:chatId" element={<ChatPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </ThemeProvider>

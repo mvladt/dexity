@@ -12,6 +12,8 @@ body,
   font-family: var(--g-text-body-font-family, sans-serif);
 }
 
+/* ── Login ─────────────────────────────────────────────── */
+
 .login-page {
   display: flex;
   align-items: center;
@@ -29,58 +31,98 @@ body,
   padding: 32px;
 }
 
-.chat-layout {
+/* ── App layout ─────────────────────────────────────────── */
+
+.app-layout {
   display: flex;
   height: 100dvh;
   overflow: hidden;
   background: var(--g-color-base-background);
+}
+
+/* ── Nav rail ───────────────────────────────────────────── */
+
+.app-nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px 8px;
+  gap: 4px;
+}
+
+.app-nav-title {
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.app-nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.app-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--g-color-text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-nav-item:hover {
+  background: var(--g-color-base-simple-hover);
+  color: var(--g-color-text-primary);
+}
+
+.app-nav-item--active {
+  background: var(--g-color-base-selection);
+  color: var(--g-color-text-primary);
+}
+
+.app-nav-footer {
+  padding: 8px;
+}
+
+/* Desktop nav wrapper */
+.app-nav-desktop {
+  width: 220px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--g-color-line-generic);
+  overflow-y: auto;
+}
+
+/* Mobile nav */
+.app-nav-mobile {
+  display: none;
+}
+
+.app-mobile-header {
+  display: none;
+}
+
+/* ── Main content ───────────────────────────────────────── */
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   --chat-max-width: 860px;
 }
 
-.chat-sidebar {
-  width: 280px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--g-color-line-generic);
-  overflow: hidden;
-}
-
-.chat-sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  gap: 8px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--g-color-line-generic);
-}
-
-.chat-sidebar-list {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.chat-sidebar-list .g-aikit-history__container {
-  width: 100%;
-}
+/* ── Chat ───────────────────────────────────────────────── */
 
 .chat-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.chat-main-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--g-color-line-generic);
-  padding-block: 8px;
-  padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
 }
 
 .chat-content {
@@ -126,8 +168,101 @@ body,
   padding: 32px;
 }
 
+/* ── History page ───────────────────────────────────────── */
+
+.history-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--g-color-line-generic);
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+}
+
+.history-list .g-aikit-history__container {
+  width: 100%;
+}
+
+/* ── Settings page ──────────────────────────────────────── */
+
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.settings-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-saved {
+  opacity: 0.8;
+}
+
+/* ── Mobile ─────────────────────────────────────────────── */
+
 @media (max-width: 640px) {
-  .chat-sidebar {
+  .app-nav-desktop {
     display: none;
+  }
+
+  .app-nav-mobile {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 260px;
+    height: 100%;
+    background: var(--g-color-base-background);
+    border-right: 1px solid var(--g-color-line-generic);
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-nav-mobile--open {
+    transform: translateX(0);
+  }
+
+  .app-nav-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 199;
+  }
+
+  .app-mobile-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--g-color-line-generic);
+    flex-shrink: 0;
   }
 }
