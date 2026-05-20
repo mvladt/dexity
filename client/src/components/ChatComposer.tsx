@@ -1,4 +1,4 @@
-import { Disclaimer, PromptInput } from '@gravity-ui/aikit';
+import { ContextIndicator, Disclaimer, PromptInput } from '@gravity-ui/aikit';
 import type { TSubmitData } from '@gravity-ui/aikit';
 import type { ChatStatus } from '@gravity-ui/aikit';
 import { Select } from '@gravity-ui/uikit';
@@ -43,15 +43,16 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
       headerProps={
         showContextIndicator
           ? {
-              showContextIndicator: true,
-              contextIndicatorProps: {
-                type: 'number',
-                usedContext: usedTokens,
-                maxContext,
-                tooltipContent: `Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним 20 сообщениям)`,
-              },
+              topContent: (
+                <ContextIndicator
+                  type="number"
+                  usedContext={usedTokens}
+                  maxContext={maxContext}
+                  tooltipContent={`Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним 20 сообщениям)`}
+                />
+              ),
             }
-          : { showContextIndicator: false }
+          : undefined
       }
       footerProps={{ bottomContent }}
     />
