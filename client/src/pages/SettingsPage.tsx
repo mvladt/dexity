@@ -28,7 +28,7 @@ export function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <Text variant="header-1">Настройки</Text>
+      <Text variant="header-1" as="h1">Настройки</Text>
 
       <div className="settings-section">
         <div className="settings-section-header">

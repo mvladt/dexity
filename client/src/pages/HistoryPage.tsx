@@ -34,7 +34,7 @@ export function HistoryPage() {
   return (
     <div className="history-page">
       <div className="history-header">
-        <Text variant="header-1">История</Text>
+        <Text variant="header-1" as="h1">История</Text>
         <Button view="action" size="s" onClick={handleNewChat}>
           + Новый чат
         </Button>
