@@ -91,6 +91,9 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       'X-Accel-Buffering': 'no',
       'Access-Control-Allow-Origin': config.CORS_ORIGIN ?? '*',
     });
+    // Fastify won't touch reply anymore — any thrown error must not reach its error handler
+    // (it would try to writeHead a 500 over an already-streaming SSE response).
+    reply.hijack();
 
     // Keep-alive ping every 15s
     const pingInterval = setInterval(() => {
@@ -113,15 +116,42 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           writeSSE(reply, { type: 'delta', delta });
         }
       }
-    } catch (err: unknown) {
-      clearInterval(pingInterval);
 
+      // Save assistant message
+      const [assistantMsg] = await db
+        .insert(messages)
+        .values({ chatId, role: 'assistant', content: fullContent })
+        .returning();
+
+      // Update chat updated_at
+      await db
+        .update(chats)
+        .set({ updatedAt: sql`(datetime('now'))` })
+        .where(eq(chats.id, chatId));
+
+      // Auto-title on first user message
+      let chatTitle: string | undefined;
+      if (userMessagesBefore === 0) {
+        chatTitle = buildTitle(userContent);
+        await db
+          .update(chats)
+          .set({ title: chatTitle, updatedAt: sql`(datetime('now'))` })
+          .where(eq(chats.id, chatId));
+      }
+
+      writeSSE(reply, {
+        type: 'done',
+        fullContent,
+        assistantMessageId: assistantMsg.id,
+        ...(chatTitle ? { chatTitle } : {}),
+      });
+    } catch (err: unknown) {
       if (abort.signal.aborted) {
         // Client cancelled — socket already closed, just bail
         return;
       }
 
-      request.log.error({ err }, 'Yandex API error');
+      request.log.error({ err }, 'Stream failed');
 
       const status = (err as { status?: number })?.status;
       let code: 'auth' | 'quota' | 'server' = 'server';
@@ -135,43 +165,15 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         message = 'Лимит запросов исчерпан';
       }
 
-      writeSSE(reply, { type: 'error', code, message });
-      reply.raw.end();
-      return;
+      try {
+        writeSSE(reply, { type: 'error', code, message });
+      } catch {
+        // socket already gone
+      }
+    } finally {
+      clearInterval(pingInterval);
+      if (!reply.raw.writableEnded) reply.raw.end();
     }
-
-    clearInterval(pingInterval);
-
-    // Save assistant message
-    const [assistantMsg] = await db
-      .insert(messages)
-      .values({ chatId, role: 'assistant', content: fullContent })
-      .returning();
-
-    // Update chat updated_at
-    await db
-      .update(chats)
-      .set({ updatedAt: sql`(datetime('now'))` })
-      .where(eq(chats.id, chatId));
-
-    // Auto-title on first user message
-    let chatTitle: string | undefined;
-    if (userMessagesBefore === 0) {
-      chatTitle = buildTitle(userContent);
-      await db
-        .update(chats)
-        .set({ title: chatTitle, updatedAt: sql`(datetime('now'))` })
-        .where(eq(chats.id, chatId));
-    }
-
-    writeSSE(reply, {
-      type: 'done',
-      fullContent,
-      assistantMessageId: assistantMsg.id,
-      ...(chatTitle ? { chatTitle } : {}),
-    });
-
-    reply.raw.end();
   });
 };
 
