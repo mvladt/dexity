@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Text } from '@gravity-ui/uikit';
 import { HistoryList } from '@gravity-ui/aikit';
@@ -9,8 +10,12 @@ function toAikitChat(chat: { id: number; title: string; createdAt: string }): Ch
 }
 
 export function HistoryPage() {
-  const { chats, activeChat, createChat, deleteChat } = useChatStore();
+  const { chats, activeChat, fetchChats, createChat, deleteChat } = useChatStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchChats();
+  }, [fetchChats]);
 
   const handleSelect = (aChat: ChatType) => {
     navigate(`/chat/${aChat.id}`);
