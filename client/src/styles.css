@@ -147,17 +147,25 @@ body,
   padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
 }
 
-.chat-input-footer {
+.chat-composer-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.chat-input-footer > :nth-child(2) {
+.chat-composer-disclaimer {
   flex: 1;
-  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .chat-composer-disclaimer {
+    display: none;
+  }
 }
 
 .chat-empty {

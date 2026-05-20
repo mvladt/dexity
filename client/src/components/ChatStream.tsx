@@ -1,11 +1,11 @@
-import { ContextIndicator, Disclaimer, MessageList, PromptInput } from '@gravity-ui/aikit';
+import { MessageList } from '@gravity-ui/aikit';
 import type { TAssistantMessage, TChatMessage, TSubmitData } from '@gravity-ui/aikit';
-import { Select } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { MODELS, getModel } from '../models';
+import { getModel } from '../models';
 import type { Message } from '../types';
+import { ChatComposer } from './ChatComposer';
 
 function toAikitMessage(msg: Message): TChatMessage {
   return {
@@ -46,7 +46,6 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
-  const setModel = useSettingsStore((s) => s.setModel);
 
   const displayMessages: TChatMessage[] = [
     ...messages.map(toAikitMessage),
@@ -82,29 +81,13 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
         />
       </div>
       <div className="chat-input">
-        <PromptInput
+        <ChatComposer
           onSend={handleSend}
           onCancel={async () => cancel()}
           status={streaming ? 'streaming' : 'ready'}
-          view="simple"
-          bodyProps={{ placeholder: 'Напишите сообщение…' }}
+          usedTokens={usedTokens}
+          maxContext={maxContext}
         />
-        <div className="chat-input-footer">
-          <Select
-            size="s"
-            value={[model]}
-            onUpdate={(vals) => setModel(vals[0])}
-            options={MODELS.map((m) => ({ value: m.id, content: m.label }))}
-            disabled={streaming}
-          />
-          <Disclaimer text="AI может ошибаться, проверяйте важное." />
-          <ContextIndicator
-            type="number"
-            usedContext={usedTokens}
-            maxContext={maxContext}
-            tooltipContent={`Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним ${HISTORY_WINDOW} сообщениям)`}
-          />
-        </div>
       </div>
     </div>
   );
