@@ -34,14 +34,14 @@
 ### 4.1. ENV / зависимости
 
 - [ ] **Новый env:** `YC_SEARCH_API_KEY` (отдельный API-ключ со scope `yc.search-api.execute`). Существующий `YC_API_KEY` используется для AI Studio (LLM) — его scope может не включать Search API, и смешивать назначения ключей нечисто. Создаём отдельный ключ на том же сервисном аккаунте (см. раздел 7, этап 0). `folderId` для поиска — тот же `YC_FOLDER_ID`.
-- [ ] Добавить одну зависимость на бэк: `fast-xml-parser` (~30KB, MIT, без транзитивных зависимостей). Парсить XML регэкспами — антипаттерн.
+- [x] Добавить одну зависимость на бэк: `fast-xml-parser` (~30KB, MIT, без транзитивных зависимостей). Парсить XML регэкспами — антипаттерн.
 
 ### 4.2. Сервис поиска (`server/src/services/search.ts`)
 
-- [ ] Создать модуль с одной функцией `webSearch(query: string, signal?: AbortSignal): Promise<Source[]>`.
-- [ ] Тип `Source`: `{ position: number; title: string; url: string; snippet: string }`.
-- [ ] Эндпоинт: `POST https://searchapi.api.cloud.yandex.net/v2/web/search` с заголовком `Authorization: Api-Key ${YC_SEARCH_API_KEY}`, `Content-Type: application/json`.
-- [ ] Тело запроса (JSON):
+- [x] Создать модуль с одной функцией `webSearch(query: string, signal?: AbortSignal): Promise<Source[]>`.
+- [x] Тип `Source`: `{ position: number; title: string; url: string; snippet: string }` (на Этапе 1 локально в `services/search.ts`, на Этапе 2 переедет в `shared/types.ts`).
+- [x] Эндпоинт: `POST https://searchapi.api.cloud.yandex.net/v2/web/search` с заголовком `Authorization: Api-Key ${YC_SEARCH_API_KEY}`, `Content-Type: application/json`.
+- [x] Тело запроса (JSON):
   ```json
   {
     "query": {
@@ -61,12 +61,12 @@
     "responseFormat": "FORMAT_XML"
   }
   ```
-- [ ] Ответ — JSON `{ "rawData": "<base64>" }`. Декодируем: `Buffer.from(rawData, 'base64').toString('utf-8')`. Внутри — XML формата `<yandexsearch><response><results><grouping><group><doc><url/><domain/><title/><passages><passage/></passages></doc></group></grouping></results></response></yandexsearch>`. Парсим через `fast-xml-parser` (`new XMLParser({ ignoreAttributes: true })`), достаём массив `doc`, маппим в `Source`. `title` и `passage` могут содержать `<hlword>foo</hlword>` — выкусываем теги: `.replace(/<\/?hlword>/g, '')`. Учесть, что `fast-xml-parser` по умолчанию схлопывает одиночный элемент в объект (а не массив) — использовать опцию `isArray: (name) => ['doc','passage','group'].includes(name)` либо нормализовать вручную.
-- [ ] Перед запросом обрезать `queryText` до 400 символов (лимит API).
-- [ ] Обработка ошибок ответа: если внутри XML есть `<error code="...">…</error>` — лог + возврат `[]`. Если HTTP не 2xx — лог + `[]`.
-- [ ] Таймаут 5 сек (`AbortSignal.timeout(5_000)` + merge с переданным `signal`), при ошибке/таймауте/non-2xx — возвращать пустой массив + лог через `fastify.log` (логирование вынести в роут — сервис не знает про fastify).
-- [ ] Возвращать максимум **5** результатов (`groupSpec.groupsOnPage = 5`). Снипы (passages) склеиваем через ` `, тримим до 400 символов.
-- [ ] Никакого кэша на первой итерации.
+- [x] Ответ — JSON `{ "rawData": "<base64>" }`. Декодируем: `Buffer.from(rawData, 'base64').toString('utf-8')`. Внутри — XML формата `<yandexsearch><response><results><grouping><group><doc><url/><domain/><title/><passages><passage/></passages></doc></group></grouping></results></response></yandexsearch>`. **Важно:** `<title>` и `<passage>` содержат подсветку `<hlword>foo</hlword>` *inline* с обычным текстом (например `<title><hlword>Борщ</hlword> по рецепту</title>`). `fast-xml-parser` ломает такой mixed content — выносит `hlword` отдельным узлом и теряет порядок текста вокруг. Поэтому вырезаем теги `<hlword>`/`</hlword>` из строки XML **до парсинга**: `xml.replace(/<\/?hlword>/g, '')`. После этого парсим через `fast-xml-parser` (`new XMLParser({ ignoreAttributes: true })`), достаём массив `doc`, маппим в `Source`. Учесть, что `fast-xml-parser` по умолчанию схлопывает одиночный элемент в объект (а не массив) — использовать опцию `isArray: (name) => ['doc','passage','group'].includes(name)`.
+- [x] Перед запросом обрезать `queryText` до 400 символов (лимит API).
+- [x] Обработка ошибок ответа: если внутри XML есть `<error code="...">…</error>` — лог + возврат `[]`. Если HTTP не 2xx — лог + `[]`.
+- [x] Таймаут 5 сек (`AbortSignal.timeout(5_000)` + merge с переданным `signal` через `AbortSignal.any`), при ошибке/таймауте/non-2xx — возвращать пустой массив. На Этапе 1 лог через `console.error` (сервис не знает про fastify); на Этапе 2 в роуте можно прокинуть `fastify.log`.
+- [x] Возвращать максимум **5** результатов (`groupSpec.groupsOnPage = 5`). Снипы (passages) склеиваем через ` `, нормализуем пробелы, тримим до 400 символов.
+- [x] Никакого кэша на первой итерации.
 
 ### 4.3. БД: новая таблица `sources`
 
@@ -212,8 +212,8 @@
   Должен прийти XML с `<yandexsearch><response>…<results>…</results>…</response>`. Если `<error code="...">` — читать `code`/текст (часто проблема в scope/роли, IAM может реплицироваться до 60 сек).
 
 ### Этап 1 — поиск работает изолированно
-- [ ] `cd server && npm install fast-xml-parser`.
-- [ ] Реализовать `services/search.ts` + ручной тест: `cd server && npx tsx -e "import('./src/services/search.ts').then(m => m.webSearch('как сварить борщ').then(r => console.log(JSON.stringify(r, null, 2))))"`.
+- [x] `cd server && npm install fast-xml-parser`.
+- [x] Реализовать `services/search.ts` + ручной тест: `cd server && npx tsx --env-file=.env -e "import('./src/services/search.ts').then(m => m.webSearch('как сварить борщ').then(r => console.log(JSON.stringify(r, null, 2))))"` → вернул 5 источников с непустыми title/url, у трёх — непустой snippet.
 
 ### Этап 2 — бэк отдаёт sources в стрим
 - [ ] Миграция таблицы `sources`.
