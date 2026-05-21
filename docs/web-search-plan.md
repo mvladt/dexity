@@ -173,9 +173,9 @@
 
 ## 6. Обновить спеки
 
-- [ ] `specs/overview.md` — добавить web-search в список пользовательских сценариев, описать тип `Source`.
-- [ ] `server/specs/backend.md` — таблица `sources`, новый эвент `sources` в SSE-стриме, новое поле `webSearch` в body, ENV для Yandex Search.
-- [ ] `client/specs/frontend.md` — тогл «Web» в композере, кастомный renderer для блока «Источники», препроцесс цитат, поле `webSearch` в `settingsStore`.
+- [x] `specs/overview.md` — добавить web-search в список пользовательских сценариев, описать тип `Source`.
+- [x] `server/specs/backend.md` — таблица `sources`, новый эвент `sources` в SSE-стриме, новое поле `webSearch` в body, ENV для Yandex Search.
+- [x] `client/specs/frontend.md` — тогл «Web» в композере, кастомный renderer для блока «Источники», препроцесс цитат, поле `webSearch` в `settingsStore`.
 
 ## 7. Пошаговый чек-лист
 
@@ -219,7 +219,7 @@
 
 ### Этап 4 — стиль и проверка
 - [x] CSS для `SourcesBlock`: компактный список карточек, hover на ссылках, mobile-first.
-- [ ] Smoke E2E (Playwright): включить тогл, задать вопрос, дождаться `sources`-блока, кликнуть `[1]` → проверить scroll к якорю.
+- [x] Smoke E2E (Playwright): включить тогл, задать вопрос, дождаться `sources`-блока, кликнуть `[1]` → проверить scroll к якорю.
 
 ## 8. Риски и открытые вопросы
 

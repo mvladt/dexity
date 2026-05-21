@@ -42,7 +42,8 @@ dexity/
 | `NODE_ENV`         | Режим (`development` / `production`)           | `production`            |
 | `ACCESS_TOKEN`     | Единый токен авторизации                       | `mysecrettoken`         |
 | `YC_FOLDER_ID` | ID каталога Yandex Cloud                       | `b1gxxxxxxxx`           |
-| `YC_API_KEY`   | API-ключ Yandex Cloud (IAM или сервис-аккаунт) | `AQVN...`               |
+| `YC_API_KEY`   | API-ключ Yandex Cloud для AI Studio (scope `yc.ai.languageModels.execute`) | `AQVN...` |
+| `YC_SEARCH_API_KEY` | API-ключ для Yandex Search API v2 (scope `yc.search-api.execute`). Используется только при `webSearch: true` | `AQVN...` |
 | `MODEL_ID`         | ID модели (без folderId)                       | `qwen3-235b-a22b-fp8`   |
 | `DATABASE_PATH`    | Путь к файлу SQLite                            | `./data/db.sqlite3`     |
 | `CORS_ORIGIN`      | Origin для CORS (только в dev)                 | `http://localhost:5173` |
@@ -87,16 +88,25 @@ export interface Chat {
   updatedAt: string;
 }
 
+export interface Source {
+  position: number; // 1..N — соответствует маркеру [N] в тексте
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 export interface Message {
   id: number;
   chatId: number;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  sources?: Source[]; // присутствует только у assistant-сообщений с web search
 }
 
 // SSE-события стриминга
 export type SSEEvent =
+  | { type: "sources"; sources: Source[] }
   | { type: "delta"; delta: string }
   | {
       type: "done";
@@ -108,6 +118,7 @@ export type SSEEvent =
 ```
 
 > `chatTitle` в `done` — присылается только если бэк только что обновил название чата.
+> `sources` приходит **первым** эвентом (до `delta`), только если в запросе был `webSearch: true`. Может быть пустым массивом, если поиск упал или ничего не нашёл.
 
 ---
 
@@ -160,3 +171,13 @@ export type SSEEvent =
 | #  | Сценарий                                                                           | Ожидаемый результат                                                 |
 | -- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | 20 | Чат с >20 сообщениями — отправить ещё одно                                         | Запрос уходит без ошибки; окно контекста не содержит оборванных пар |
+
+### Web search
+
+| #  | Сценарий                                                                       | Ожидаемый результат                                                            |
+| -- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 21 | Включить тогл «Web», задать вопрос                                             | До текста ответа появляется блок «Источники» с ≤5 карточками (title/host/snippet) |
+| 22 | LLM поставила маркеры `[1]`, `[2]` в ответе                                    | Маркеры рендерятся как ссылки на якоря `#src-{messageId}-{N}`, клик скроллит к карточке |
+| 23 | Yandex Search API упал / нет результатов                                       | Блок «Источники» не показывается, LLM отвечает по своим знаниям без маркеров   |
+| 24 | Перезагрузить страницу с историей сообщений, где были источники                | Источники подтягиваются из БД, цитаты остаются кликабельными                   |
+| 25 | Тогл «Web» выключен                                                            | Поиск не выполняется, SSE-эвент `sources` не приходит, чат работает как раньше |

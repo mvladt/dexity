@@ -76,3 +76,34 @@ Favicon: реализован через `https://www.google.com/s2/favicons?dom
 Доработки после субагента (упёрся в лимит до финальной проверки):
 - В `ChatStream.tsx` была опечатка `buildRegistry(streaming)` — функция определена без параметров, `tsc` падал. Registry не зависит от пропсов/состояния, поэтому вынес `messageRendererRegistry` в модульный уровень и убрал `useMemo` + импорт `useMemo`.
 - Браузерная проверка пройдена через Playwright (вместо `cd client && npm run dev` пришлось поднять сервер заново — был остановлен): тогл «Web» включается, при запросе «кто сейчас президент Франции» блок «Источники» появляется с 5 карточками (`.sources-block__card`), якоря `src-{messageId}-{1..5}` присутствуют, цитата `[1]` рендерится как ссылка на `#src-126-1`, клик прокручивает к якорю, после reload `GET /messages` возвращает sources, блок и цитаты рендерятся идентично свежему ответу.
+
+## Этап 4 — стиль и проверка
+
+Изменённые/созданные файлы:
+- `client/src/components/SourcesBlock.css` — ревизия CSS: `gap` 8→6, `padding` 10→8 (компактнее), `word-break` → `overflow-wrap` (современный стандарт, не ломает слова посреди), mobile-first `line-clamp: 2` со снятием до 3 строк на `min-width: 640px`, убран лишний `width: 100%` у карточки. Без переусложнения, по правилу «здоровый минимализм».
+- `e2e/tests/web-search.spec.ts` — smoke E2E на Playwright (golden path).
+
+E2E (`web-search.spec.ts`) — один тест:
+1. Создаём чат через API, логинимся, переходим на `/chat/:id`.
+2. Включаем тогл «Web» (клик по `label.g-switch` — у `g-switch__slider` есть pointer-intercept, который не даёт кликнуть по `<input role="switch">` напрямую).
+3. Перехватываем POST `/messages/stream` и проверяем `webSearch: true` в теле.
+4. Задаём реальный вопрос («Кто сейчас президент Франции?»), реально дёргаем Yandex Search + LLM.
+5. Ждём `.sources-block` (timeout 30s), проверяем ≥1 карточку.
+6. Дожидаемся конца стриминга, ищем в `.g-aikit-assistant-message` либо ссылку `a[href^="#src-"]`, либо текстовый маркер `[N]` (на случай если LLM не поставила маркеры — это не баг).
+7. Кликаем по цитате, проверяем что карточка `.sources-block__card` в viewport.
+8. `finally`: `cancelStreamIfActive` + `deleteChatViaApi`.
+
+Прогон: **1/1 passed, 5.7s**. Скриншоты: `e2e/screenshots/ws-01-sources-block.png`, `ws-02-after-streaming.png`, `ws-03-citation-clicked.png`.
+
+Находки в процессе (не баги фичи, особенности библиотек):
+- `gravity-ui Switch`: клик по `getByRole('switch')` блокируется `g-switch__slider` (pointer-events overlay). Воркэраунд — клик по `label.g-switch`.
+- В исходниках `aikit` ассистент-сообщение — `.g-aikit-assistant-message` (через `block('assistant-message')`), а не `.g-aikit-message`.
+
+## Этап 5 — спеки
+
+Обновлены:
+- `specs/overview.md` — добавлен `Source` в `shared/types.ts`, поле `Message.sources?`, вариант SSE `{ type: 'sources'; sources }`, ENV `YC_SEARCH_API_KEY`, сценарии 21–25 (Web search).
+- `server/specs/backend.md` — таблица `sources` (SQL + индекс), зависимость `fast-xml-parser`, путь `services/search.ts`, поля `model`/`systemPrompt`/`webSearch` в POST body, `sources`-эвент в SSE, шаги 3a/7/9 в потоке стриминга (запрос в Yandex Search до стрима, sources первым SSE-фреймом, bulk-insert в БД).
+- `client/specs/frontend.md` — `components/SourcesBlock.tsx`, `components/ChatComposer.tsx`, `utils/citations.ts`, `stores/settingsStore.ts` в структуре; тогл «Web» и `SourcesBlock` в таблице компонентов; `useSettingsStore` (model/systemPrompt/webSearch, persist `dexity-settings`); `partialSources` в `streamStore`; ветка `sources` в SSE-парсере; отдельный раздел «Web search: рендер цитат и блока Источники».
+
+Спеки про существующие до фичи поля `model`/`systemPrompt` в POST body тоже подтянуты — они присутствовали в коде до web search, но не были отражены в backend.md. Залатано вместе.

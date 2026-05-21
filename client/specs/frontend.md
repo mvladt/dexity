@@ -17,16 +17,21 @@ client/
 │   │   └── ChatPage.tsx          # сайдбар + чат + EmptyContainer
 │   ├── components/
 │   │   ├── ChatSidebar.tsx       # обёртка над AIKit History
-│   │   ├── ChatStream.tsx        # MessageList + ThinkingMessage + PromptInput
+│   │   ├── ChatStream.tsx        # MessageList + ThinkingMessage; регистрирует messageRendererRegistry для 'sources'
+│   │   ├── ChatComposer.tsx      # PromptInput + Select (модель) + Switch «Web»
+│   │   ├── SourcesBlock.tsx      # блок «Источники» с карточками + якоря
 │   │   └── ThemeSwitcher.tsx     # переключатель темы
+│   ├── utils/
+│   │   └── citations.ts          # injectCitationLinks: [N] → [\[N\]](#src-{msgId}-{N})
 │   ├── stores/
 │   │   ├── authStore.ts          # Zustand: token (persist localStorage)
 │   │   ├── chatStore.ts          # Zustand: chats, activeChat, messages
-│   │   ├── streamStore.ts        # Zustand: streaming, partialContent
+│   │   ├── streamStore.ts        # Zustand: streaming, partialContent, partialSources
+│   │   ├── settingsStore.ts      # Zustand: model, systemPrompt, webSearch (persist 'dexity-settings')
 │   │   └── themeStore.ts         # Zustand: theme (persist localStorage)
 │   ├── services/
 │   │   ├── api.ts                # fetch-обёртка (VITE_API_URL + Bearer)
-│   │   └── stream.ts             # SSE-парсер через ReadableStream
+│   │   └── stream.ts             # SSE-парсер через ReadableStream; колбэки onDelta/onSources/onDone/onError
 │   ├── types.ts                  # re-export из shared/types.ts
 │   └── styles.css                # минимум глобальных стилей
 ├── index.html
@@ -72,6 +77,8 @@ client/
 | Сообщение ассистента            | `AssistantMessage` (`@gravity-ui/aikit`)     | Внутри — `MarkdownRenderer`. `isThinking` во время стрима   |
 | Сообщение пользователя          | `UserMessage` (`@gravity-ui/aikit`)          | Plain text                                                  |
 | Поле ввода                      | `PromptInput` (`@gravity-ui/aikit`)          | `onSubmit`, `disabled` во время стрима                      |
+| Тогл web search                 | `Switch` (`@gravity-ui/uikit`)               | Лейбл «Web» рядом с `Select` модели; биндится на `settingsStore.webSearch` |
+| Блок «Источники»                | `SourcesBlock` (кастомный)                   | Регистрируется через `messageRendererRegistry` как content-type `sources`; рендерит карточки (Card uikit) с якорями `<a id="src-{messageId}-{position}">` |
 | Сайдбар (история чатов)         | `History` (`@gravity-ui/aikit`)              | `items[]`, действия `onSelect`/`onRename`/`onDelete`        |
 | Пустое состояние                | `EmptyContainer` (`@gravity-ui/aikit`)       | Показывается на `/chat` без активного чата                  |
 | Подсказки на пустом экране      | `Suggestions` (`@gravity-ui/aikit`)          | Perplexity-стайл квик-старт промпты (3-4 шт. захардкожены) |
@@ -123,10 +130,29 @@ interface ChatStore {
 interface StreamStore {
   streaming: boolean;
   partialContent: string;
+  partialSources: Source[]; // накапливается из SSE-эвента 'sources' до 'done'
   error: { code: "auth" | "quota" | "server"; message: string } | null;
   startStream: (chatId: number, content: string) => Promise<void>;
-  // внутри: api.postSSE → парсинг → updates partialContent → on 'done' пушит в chatStore
+  // внутри: api.postSSE с webSearch из settingsStore → парсинг →
+  //   onSources → partialSources = sources;
+  //   onDelta → partialContent += delta;
+  //   onDone → appendMessage({..., sources: partialSources}) в chatStore,
+  //            сброс partialContent/partialSources.
 }
+```
+
+### `useSettingsStore` (`stores/settingsStore.ts`)
+
+```typescript
+interface SettingsStore {
+  model: string;             // ID модели для отправки в POST body
+  systemPrompt: string;      // пользовательский system prompt
+  webSearch: boolean;        // тогл «Web» в композере, default false
+  setModel: (m: string) => void;
+  setSystemPrompt: (p: string) => void;
+  setWebSearch: (v: boolean) => void;
+}
+// persist: localStorage ключ 'dexity-settings'
 ```
 
 ### `useThemeStore` (`stores/themeStore.ts`)
@@ -149,9 +175,10 @@ interface ThemeStore {
 // 2. response.body → ReadableStream<Uint8Array> → TextDecoderStream
 // 3. Буфер: накапливаем chunks, режем по '\n\n'
 // 4. Для каждого блока: snip 'data: ' → JSON.parse → SSEEvent
-// 5. delta → callbacks.onDelta(delta)
-// 6. done  → callbacks.onDone(fullContent, assistantMessageId, chatTitle?)
-// 7. error → callbacks.onError(code, message)
+// 5. sources → callbacks.onSources(sources)  (приходит первым, если webSearch=true)
+// 6. delta   → callbacks.onDelta(delta)
+// 7. done    → callbacks.onDone(fullContent, assistantMessageId, chatTitle?)
+// 8. error   → callbacks.onError(code, message)
 // 8. response.ok === false перед открытием стрима:
 //    401 → onError('auth', 'Unauthorized')
 //    404 → onError('server', 'Chat not found')
@@ -181,3 +208,14 @@ interface ThemeStore {
 **UX-поведение:**
 - Удаление активного чата → `DELETE` → redirect `/chat`, `activeChat = null`.
 - Перезагрузка страницы во время стрима: клиент разрывает fetch, бэк дописывает ответ до конца и сохраняет в БД. При следующем `GET /messages` пользователь увидит полный ответ.
+
+---
+
+## Web search: рендер цитат и блока «Источники»
+
+- Тогл «Web» (`Switch` uikit) живёт в `ChatComposer`, биндится на `settingsStore.webSearch`. При отправке `startStream` достаёт значение из стора и кладёт в POST body как `webSearch: true`.
+- Во время стрима первый SSE-эвент при включённом тогле — `sources`; `streamStore.partialSources` заполняется до прихода `delta`. Блок «Источники» рендерится сразу, ещё до текста ответа.
+- В `ChatStream.tsx` ассистент-сообщение с `sources` собирается из двух частей `content`: сначала `{ type: 'sources', data: { sources, messageId } }`, потом `{ type: 'text', data: { text: preprocessed } }`. Кастомный тип `sources` зарегистрирован через `createMessageRendererRegistry` + `registerMessageRenderer` (из `@gravity-ui/aikit`) и передан в `MessageList` через prop `messageRendererRegistry`.
+- `utils/citations.ts` (`injectCitationLinks`) препроцессит текст: заменяет маркеры `[N]` (N=1..sources.length) на Markdown-линки `[\[N\]](#src-{messageId}-{N})`. Несуществующие маркеры (`[6]` при 5 источниках) остаются plain text. Во время стрима `messageId = 'streaming'`, после `done` — настоящий ID из БД.
+- `SourcesBlock` рендерит вертикальный список карточек (`Card` uikit, нативный CSS, mobile-first). Якорь — `<a id="src-{messageId}-{position}">`. Клик по цитате в тексте → нативный scroll к якорю.
+- При перезагрузке страницы `GET /messages` отдаёт `sources` внутри `Message`, `toAikitMessage` собирает тот же двухчастный `content` — цитаты и блок «Источники» рендерятся идентично свежему ответу.

@@ -21,7 +21,8 @@ server/
 │   │   ├── chats.ts          # CRUD чатов
 │   │   └── messages.ts       # GET history + POST stream
 │   ├── services/
-│   │   └── llm.ts            # OpenAI-клиент + streamChat(messages[])
+│   │   ├── llm.ts            # OpenAI-клиент + streamChat(messages[])
+│   │   └── search.ts         # Yandex Search API v2 → Source[]
 │   └── types.ts              # re-export из shared/types.ts
 ├── data/                     # .gitignore: db.sqlite3
 ├── package.json
@@ -39,7 +40,8 @@ server/
     "drizzle-orm": "^0.38",
     "openai": "^4",
     "dotenv": "^16",
-    "zod": "^3"
+    "zod": "^3",
+    "fast-xml-parser": "^4"
   },
   "devDependencies": {
     "tsx": "^4",
@@ -100,13 +102,25 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS sources (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  position   INTEGER NOT NULL,        -- 1..N, соответствует маркеру [N] в тексте
+  title      TEXT    NOT NULL,
+  url        TEXT    NOT NULL,
+  snippet    TEXT    NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id      ON messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_chats_user_id         ON chats(user_id);
+CREATE INDEX IF NOT EXISTS idx_sources_message_id    ON sources(message_id);
 
 -- Гарантируем существование дефолтного пользователя (user_id=1 в chats)
 INSERT OR IGNORE INTO users (id) VALUES (1);
 ```
+
+> Источники для сообщения определяются наличием строк в `sources` для данного `message_id` — отдельный флаг в `messages` не нужен.
 
 ### Drizzle-схема (`server/src/db/schema.ts`)
 
@@ -207,8 +221,16 @@ export const messages = sqliteTable(
 **POST `/api/chats/:chatId/messages/stream` Request:**
 
 ```json
-{ "content": "string" }
+{
+  "content": "string",
+  "model": "string (optional)",
+  "systemPrompt": "string (optional)",
+  "webSearch": true
+}
 ```
+
+- `webSearch` (опционально, default `false`) — если `true`, бэк до старта LLM-стрима выполняет запрос в Yandex Search API v2 и пушит SSE-эвент `sources` (даже пустой массив).
+- При `webSearch: true` системный промпт расширяется блоком с источниками (см. поток стриминга) либо заметкой «Поиск не дал результатов» — если массив пустой.
 
 **Response headers:**
 
@@ -222,12 +244,16 @@ X-Accel-Buffering: no
 **Формат SSE-событий:**
 
 ```
+data: {"type":"sources","sources":[{"position":1,"title":"...","url":"https://...","snippet":"..."}]}
+
 data: {"type":"delta","delta":"Привет"}
 
 data: {"type":"delta","delta":", мир"}
 
 data: {"type":"done","fullContent":"Привет, мир","assistantMessageId":42,"chatTitle":"Привет"}
 ```
+
+> `sources` — только при `webSearch: true`, всегда **первым** эвентом до любого `delta`.
 
 При ошибке:
 
@@ -270,7 +296,7 @@ HTTP 404: { "error": "Chat not found" }
 | `:chatId` (все маршруты)        | `z.coerce.number().int().positive()`                         |
 | `POST /api/chats` body          | `z.object({ title: z.string().min(1).max(200).optional() })` |
 | `PATCH /api/chats/:chatId` body | `z.object({ title: z.string().min(1).max(200) })`            |
-| `POST …/messages/stream` body   | `z.object({ content: z.string().min(1).max(10_000) })`       |
+| `POST …/messages/stream` body   | `z.object({ content: z.string().min(1).max(10_000), model: z.string().optional(), systemPrompt: z.string().optional(), webSearch: z.boolean().optional() })` |
 | `POST /api/auth/verify` body    | `z.object({ token: z.string().min(1) })`                     |
 
 Fastify `bodyLimit: 102_400` (100 KB).
@@ -288,9 +314,15 @@ POST /api/chats/:chatId/messages/stream
 │      SELECT * FROM messages WHERE chat_id=? ORDER BY created_at DESC LIMIT 20 → reverse
 │      Если первое сообщение в окне — role='assistant' (пара разрезана LIMIT), отбросить его.
 │      Запомнить userMessagesBefore = count(role='user') в этом окне (нужно для шага 10).
+├── 3a. (только при webSearch=true) services/search.ts → webSearch(content, abort.signal):
+│      POST https://searchapi.api.cloud.yandex.net/v2/web/search (Api-Key YC_SEARCH_API_KEY).
+│      Декодируем base64 rawData → XML, режем <hlword> до парсинга fast-xml-parser,
+│      собираем до 5 Source. Таймаут 5s, на любую ошибку → []. См. план web-search-plan.md §4.2.
 ├── 4. Сохранить user-сообщение в БД (INSERT)
 ├── 5. Сформировать messages[] для LLM:
-│      [ ...последние_20, { role: 'user', content: <новый текст> } ]
+│      systemPrompt (пользовательский) + (при webSearch) блок с источниками или заметка
+│        «Поиск не дал результатов или временно недоступен. Отвечай по своим знаниям.»;
+│      [ {role:'system', content: <combined>}, ...последние_20, {role:'user', content:<новый>} ]
 ├── 6. Вызвать Yandex AI Studio через openai npm SDK:
 │      const client = new OpenAI({
 │        baseURL: 'https://llm.api.cloud.yandex.net/v1',
@@ -302,6 +334,7 @@ POST /api/chats/:chatId/messages/stream
 │        stream:  true,
 │      })
 ├── 7. Открыть SSE-ответ (set headers, reply.raw.write).
+│      Если webSearch=true → первый writeSSE: { type: 'sources', sources } (даже пустой).
 ├── 8. Итерация по чанкам:
 │      for await (const chunk of stream) {
 │        const delta = chunk.choices[0]?.delta?.content ?? ''
@@ -309,6 +342,7 @@ POST /api/chats/:chatId/messages/stream
 │      }
 ├── 9. INSERT assistant-сообщения в БД, UPDATE chats SET updated_at=datetime('now').
 │      (updated_at обновляется после стрима — чат поднимается в сайдбаре по завершении ответа)
+│      Если sources непустой — bulk INSERT в sources с message_id = assistantMsg.id.
 ├── 10. Авто-заголовок (только если userMessagesBefore === 0, т.е. это первый user-запрос):
 │       text = user.content.trim().replace(/\s+/g, ' ')
 │       Обрезать по последнему пробелу до 50 символов, добавить '…'
