@@ -1,4 +1,4 @@
-import { ContextIndicator, Disclaimer, PromptInput } from '@gravity-ui/aikit';
+import { ContextIndicator, PromptInput } from '@gravity-ui/aikit';
 import type { TSubmitData } from '@gravity-ui/aikit';
 import type { ChatStatus } from '@gravity-ui/aikit';
 import { Select } from '@gravity-ui/uikit';
@@ -29,7 +29,6 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
         options={MODELS.map((m) => ({ value: m.id, content: m.label }))}
         disabled={status === 'streaming'}
       />
-      <Disclaimer className="chat-composer-disclaimer" text="AI может ошибаться, проверяйте важное." />
     </div>
   );
 
