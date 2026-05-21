@@ -27,6 +27,17 @@ export function migrate(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_chats_user_id         ON chats(user_id);
 
+    CREATE TABLE IF NOT EXISTS sources (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+      position   INTEGER NOT NULL,
+      title      TEXT    NOT NULL,
+      url        TEXT    NOT NULL,
+      snippet    TEXT    NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sources_message_id ON sources(message_id);
+
     INSERT OR IGNORE INTO users (id) VALUES (1);
   `);
 }

@@ -1,1 +1,1 @@
-export type { Chat, Message, SSEEvent } from '../../shared/types.js';
+export type { Chat, Message, SSEEvent, Source } from '../../shared/types.js';

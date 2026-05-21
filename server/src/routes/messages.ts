@@ -1,9 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { eq, asc, desc, sql } from 'drizzle-orm';
+import { eq, asc, desc, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { chats, messages } from '../db/schema.js';
+import { chats, messages, sources } from '../db/schema.js';
 import { streamChat } from '../services/llm.js';
+import { webSearch } from '../services/search.js';
+import type { Source, Message } from '../types.js';
 import { config } from '../config.js';
 
 const chatIdSchema = z.coerce.number().int().positive();
@@ -11,7 +13,24 @@ const streamBodySchema = z.object({
   content: z.string().min(1).max(10_000),
   model: z.string().optional(),
   systemPrompt: z.string().max(4000).optional(),
+  webSearch: z.boolean().optional(),
 });
+
+function buildSearchPromptBlock(srcs: Source[]): string {
+  const list = srcs
+    .map((s) => `[${s.position}] ${s.title} (${s.url})\n${s.snippet}`)
+    .join('\n\n');
+  return [
+    'Используй источники ниже для ответа. Ставь маркеры цитат [1], [2]… сразу после факта.',
+    'Не выдумывай факты, которых нет в источниках. Если данных недостаточно — скажи об этом.',
+    '',
+    'Источники:',
+    list,
+  ].join('\n');
+}
+
+const NO_RESULTS_NOTE =
+  'Поиск не дал результатов или временно недоступен. Отвечай по своим знаниям.';
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -37,7 +56,27 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       .from(messages)
       .where(eq(messages.chatId, idResult.data))
       .orderBy(asc(messages.createdAt));
-    return reply.send(rows);
+
+    const ids = rows.map((r) => r.id);
+    const srcRows = ids.length
+      ? await db.select().from(sources).where(inArray(sources.messageId, ids))
+      : [];
+
+    const byMessage = new Map<number, Source[]>();
+    for (const s of srcRows) {
+      const arr = byMessage.get(s.messageId) ?? [];
+      arr.push({ position: s.position, title: s.title, url: s.url, snippet: s.snippet });
+      byMessage.set(s.messageId, arr);
+    }
+    for (const arr of byMessage.values()) {
+      arr.sort((a, b) => a.position - b.position);
+    }
+
+    const result: Message[] = rows.map((r) => {
+      const arr = byMessage.get(r.id);
+      return arr && arr.length > 0 ? { ...r, sources: arr } : r;
+    });
+    return reply.send(result);
   });
 
   fastify.post('/api/chats/:chatId/messages/stream', async (request, reply) => {
@@ -49,7 +88,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     if (!bodyResult.success) return reply.status(400).send({ error: 'Invalid request' });
     const userContent = bodyResult.data.content;
     const modelOverride = bodyResult.data.model;
-    const systemPrompt = bodyResult.data.systemPrompt?.trim() || undefined;
+    const userSystemPrompt = bodyResult.data.systemPrompt?.trim() || undefined;
+    const webSearchEnabled = bodyResult.data.webSearch === true;
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
@@ -76,9 +116,34 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       .values({ chatId, role: 'user', content: userContent })
       .returning();
 
+    // Abort upstream when client disconnects (stop paying Yandex tokens on cancel)
+    const abort = new AbortController();
+    request.raw.on('close', () => abort.abort());
+
+    // Web search before SSE — so sources event can be the first frame
+    let foundSources: Source[] = [];
+    if (webSearchEnabled) {
+      try {
+        foundSources = await webSearch(userContent, abort.signal);
+      } catch (err) {
+        request.log.warn({ err }, 'web search failed');
+        foundSources = [];
+      }
+    }
+
     // Build LLM context
+    let effectiveSystemPrompt: string | undefined = userSystemPrompt;
+    if (webSearchEnabled) {
+      const block = foundSources.length > 0
+        ? buildSearchPromptBlock(foundSources)
+        : NO_RESULTS_NOTE;
+      effectiveSystemPrompt = effectiveSystemPrompt
+        ? `${effectiveSystemPrompt}\n\n${block}`
+        : block;
+    }
+
     const llmMessages = [
-      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+      ...(effectiveSystemPrompt ? [{ role: 'system' as const, content: effectiveSystemPrompt }] : []),
       ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       { role: 'user' as const, content: userContent },
     ];
@@ -95,14 +160,15 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     // (it would try to writeHead a 500 over an already-streaming SSE response).
     reply.hijack();
 
+    // Send sources first (even if empty) so UI can render the panel skeleton
+    if (webSearchEnabled) {
+      writeSSE(reply, { type: 'sources', sources: foundSources });
+    }
+
     // Keep-alive ping every 15s
     const pingInterval = setInterval(() => {
       reply.raw.write(': ping\n\n');
     }, 15_000);
-
-    // Abort upstream when client disconnects (stop paying Yandex tokens on cancel)
-    const abort = new AbortController();
-    request.raw.on('close', () => abort.abort());
 
     let fullContent = '';
 
@@ -122,6 +188,18 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         .insert(messages)
         .values({ chatId, role: 'assistant', content: fullContent })
         .returning();
+
+      if (foundSources.length > 0) {
+        await db.insert(sources).values(
+          foundSources.map((s) => ({
+            messageId: assistantMsg.id,
+            position: s.position,
+            title: s.title,
+            url: s.url,
+            snippet: s.snippet,
+          })),
+        );
+      }
 
       // Update chat updated_at
       await db

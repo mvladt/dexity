@@ -70,7 +70,7 @@
 
 ### 4.3. БД: новая таблица `sources`
 
-- [ ] В `server/src/db/schema.ts` добавить:
+- [x] В `server/src/db/schema.ts` добавить:
   ```ts
   export const sources = sqliteTable(
     'sources',
@@ -89,15 +89,15 @@
     }),
   );
   ```
-- [ ] В `server/src/db/migrate.ts` добавить `CREATE TABLE IF NOT EXISTS sources (…); CREATE INDEX IF NOT EXISTS …;` (без drizzle-kit — как принято в проекте).
-- [ ] **Не** добавлять `web_search_enabled` в `messages` — наличие записей в `sources` для данного `message_id` уже сигнал.
+- [x] В `server/src/db/migrate.ts` добавить `CREATE TABLE IF NOT EXISTS sources (…); CREATE INDEX IF NOT EXISTS …;` (без drizzle-kit — как принято в проекте).
+- [x] **Не** добавлять `web_search_enabled` в `messages` — наличие записей в `sources` для данного `message_id` уже сигнал.
 
 ### 4.4. Изменения в `server/src/routes/messages.ts`
 
-- [ ] В `streamBodySchema` добавить `webSearch: z.boolean().optional()`.
-- [ ] Расширить тип SSE-эвентов в `shared/types.ts`: добавить вариант `{ type: 'sources'; sources: Source[] }`.
-- [ ] Перед открытием SSE-стрима: если `webSearch === true`, вызвать `search.webSearch(userContent, abort.signal)`. Открытие SSE оставить на месте — но первый `writeSSE` после `writeHead` сделать как раз `{ type: 'sources', sources }`.
-- [ ] Если sources не пустые — построить prefix к системному промпту:
+- [x] В `streamBodySchema` добавить `webSearch: z.boolean().optional()`.
+- [x] Расширить тип SSE-эвентов в `shared/types.ts`: добавить вариант `{ type: 'sources'; sources: Source[] }`.
+- [x] Перед открытием SSE-стрима: если `webSearch === true`, вызвать `search.webSearch(userContent, abort.signal)`. Открытие SSE оставить на месте — но первый `writeSSE` после `writeHead` сделать как раз `{ type: 'sources', sources }`.
+- [x] Если sources не пустые — построить prefix к системному промпту:
   ```
   Используй источники ниже для ответа. Ставь маркеры цитат [1], [2]… сразу после факта.
   Не выдумывай факты, которых нет в источниках. Если данных недостаточно — скажи об этом.
@@ -109,8 +109,8 @@
   [2] …
   ```
   Конкатенировать с user-systemPrompt (если есть): сначала systemPrompt, потом блок поиска.
-- [ ] Если sources пустые (поиск упал/нет результатов) и `webSearch === true` — добавить заметку «Поиск не дал результатов, отвечай по своим знаниям».
-- [ ] После получения `assistantMsg.id` — bulk-insert sources с этим `messageId`:
+- [x] Если sources пустые (поиск упал/нет результатов) и `webSearch === true` — добавить заметку «Поиск не дал результатов, отвечай по своим знаниям».
+- [x] После получения `assistantMsg.id` — bulk-insert sources с этим `messageId`:
   ```ts
   if (sources.length > 0) {
     await db.insert(schema.sources).values(
@@ -118,11 +118,11 @@
     );
   }
   ```
-- [ ] В `GET /api/chats/:chatId/messages`: подтягивать источники одним запросом и группировать в `Message.sources?: Source[]`. Простой путь — `db.select().from(sources).where(inArray(sources.messageId, ids))`, потом группировка в JS.
+- [x] В `GET /api/chats/:chatId/messages`: подтягивать источники одним запросом и группировать в `Message.sources?: Source[]`. Простой путь — `db.select().from(sources).where(inArray(sources.messageId, ids))`, потом группировка в JS.
 
 ### 4.5. Расширение `Message` в `shared/types.ts`
 
-- [ ] Добавить:
+- [x] Добавить:
   ```ts
   export interface Source {
     position: number;
@@ -216,11 +216,11 @@
 - [x] Реализовать `services/search.ts` + ручной тест: `cd server && npx tsx --env-file=.env -e "import('./src/services/search.ts').then(m => m.webSearch('как сварить борщ').then(r => console.log(JSON.stringify(r, null, 2))))"` → вернул 5 источников с непустыми title/url, у трёх — непустой snippet.
 
 ### Этап 2 — бэк отдаёт sources в стрим
-- [ ] Миграция таблицы `sources`.
-- [ ] Расширить `shared/types.ts` (Source, SSEEvent).
-- [ ] Изменить роут `messages/stream`: тогл, инжект в промпт, sources-эвент, сохранение в БД.
-- [ ] Расширить `GET /messages` — отдавать source’ы.
-- [ ] Проверить через `curl` SSE-выхлоп с `webSearch: true`.
+- [x] Миграция таблицы `sources`.
+- [x] Расширить `shared/types.ts` (Source, SSEEvent).
+- [x] Изменить роут `messages/stream`: тогл, инжект в промпт, sources-эвент, сохранение в БД.
+- [x] Расширить `GET /messages` — отдавать source’ы.
+- [x] Проверить через `curl` SSE-выхлоп с `webSearch: true`.
 
 ### Этап 3 — фронт показывает блок «Источники»
 - [ ] Тогл «Web» в `settingsStore` + `ChatComposer`.

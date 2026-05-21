@@ -1,11 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
+import type { Source } from '../../../shared/types.js';
 
-export interface Source {
-  position: number;
-  title: string;
-  url: string;
-  snippet: string;
-}
+export type { Source };
 
 const ENDPOINT = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
 const QUERY_MAX_LEN = 400;

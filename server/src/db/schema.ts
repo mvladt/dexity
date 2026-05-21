@@ -30,3 +30,20 @@ export const messages = sqliteTable(
     chatCreatedIdx: index('idx_messages_chat_created').on(t.chatId, t.createdAt),
   }),
 );
+
+export const sources = sqliteTable(
+  'sources',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    messageId: integer('message_id')
+      .notNull()
+      .references(() => messages.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    url: text('url').notNull(),
+    snippet: text('snippet').notNull(),
+  },
+  (t) => ({
+    messageIdx: index('idx_sources_message_id').on(t.messageId),
+  }),
+);
