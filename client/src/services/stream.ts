@@ -1,4 +1,4 @@
-import type { SSEEvent } from '../types';
+import type { SSEEvent, Source } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -7,9 +7,11 @@ interface StreamCallbacks {
   onDelta: (delta: string) => void;
   onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
+  onSources?: (sources: Source[]) => void;
   signal?: AbortSignal;
   model?: string;
   systemPrompt?: string;
+  webSearch?: boolean;
 }
 
 export async function streamMessages(
@@ -32,6 +34,7 @@ export async function streamMessages(
         content,
         ...(callbacks.model ? { model: callbacks.model } : {}),
         ...(callbacks.systemPrompt ? { systemPrompt: callbacks.systemPrompt } : {}),
+        ...(callbacks.webSearch ? { webSearch: true } : {}),
       }),
       signal,
     });
@@ -78,6 +81,8 @@ export async function streamMessages(
 
           if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
+          } else if (event.type === 'sources') {
+            callbacks.onSources?.(event.sources);
           } else if (event.type === 'done') {
             callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
           } else if (event.type === 'error') {

@@ -140,13 +140,13 @@
 
 ### 5.1. Тогл «Web» в `ChatComposer`
 
-- [ ] В `client/src/stores/settingsStore.ts` добавить `webSearch: boolean` + `setWebSearch` (persist в `dexity-settings`). Тогл — глобальный, как `model`/`systemPrompt`. Это удобнее, чем per-chat: если включил — пишет всем чатам с поиском.
-- [ ] В `ChatComposer.tsx` в `bottomContent` рядом с `Select` модели добавить тогл `Switch` из `@gravity-ui/uikit` с лейблом «Web». Без поиска иконок/кастомных компонентов.
+- [x] В `client/src/stores/settingsStore.ts` добавить `webSearch: boolean` + `setWebSearch` (persist в `dexity-settings`). Тогл — глобальный, как `model`/`systemPrompt`. Это удобнее, чем per-chat: если включил — пишет всем чатам с поиском.
+- [x] В `ChatComposer.tsx` в `bottomContent` рядом с `Select` модели добавить тогл `Switch` из `@gravity-ui/uikit` с лейблом «Web». Без поиска иконок/кастомных компонентов.
 
 ### 5.2. SSE-обработка
 
-- [ ] В `client/src/services/stream.ts` добавить колбэк `onSources(sources: Source[])` в `StreamCallbacks` и ветку `event.type === 'sources'`.
-- [ ] В `client/src/stores/streamStore.ts`:
+- [x] В `client/src/services/stream.ts` добавить колбэк `onSources(sources: Source[])` в `StreamCallbacks` и ветку `event.type === ‘sources’`.
+- [x] В `client/src/stores/streamStore.ts`:
   - Добавить `partialSources: Source[]` (накапливается во время стрима).
   - Прокинуть `webSearch` из `settingsStore` в `streamMessages`.
   - В `onSources` — `set({ partialSources: sources })`.
@@ -154,35 +154,22 @@
 
 ### 5.3. Передача `webSearch` в запрос
 
-- [ ] В `streamMessages` принимать `webSearch?: boolean` и добавлять в body.
+- [x] В `streamMessages` принимать `webSearch?: boolean` и добавлять в body.
 
 ### 5.4. Рендер цитат и блока «Источники»
 
 **Подход:** препроцессим текст сообщения перед передачей в `MarkdownRenderer` — заменяем `[N]` на Markdown-линки `[\[N\]](#src-msgId-N)`. Сам блок «Источники» рендерим под текстом, у каждого источника — `<a id="src-msgId-N">`. Якоря работают в SPA без роутинга, потому что прыжок внутри страницы.
 
-- [ ] Решение: **не использовать `messageRendererRegistry`**. У нас одно текстовое сообщение с трейлером — проще обернуть `MessageList` через `assistantMessageProps`/кастомный renderer или передавать `content` как массив частей. Но `MessageList` из aikit принимает массив `TChatMessage`, поле `content` — строка либо массив `TMessageContent`. Используем массив:
-  ```ts
-  content: [
-    { type: 'text', data: { text: preprocessed } },
-    { type: 'sources', data: { sources, messageId } }, // custom
-  ]
-  ```
-- [ ] Зарегистрировать кастомный тип контента `sources` через `createMessageRendererRegistry` + `registerMessageRenderer` (см. `messageTypeRegistry.ts` в aikit) и передать registry в `MessageList` через prop `messageRendererRegistry` (проверить точное имя prop’а в `MessageList.tsx`).
-- [ ] Компонент `<SourcesBlock messageId={...} sources={[...]} />`: вертикальный список карточек (Card из `@gravity-ui/uikit`), у каждой — `<a id="src-{messageId}-{position}">`, title (ссылка, target="_blank"), под title — host (favicon опционально, через `https://www.google.com/s2/favicons?domain=…`), snippet.
-- [ ] Препроцесс текста — отдельная утилка `client/src/utils/citations.ts`:
-  ```ts
-  export function injectCitationLinks(text: string, messageId: string, maxN: number): string {
-    return text.replace(/\[(\d+)\]/g, (m, n) =>
-      Number(n) >= 1 && Number(n) <= maxN ? `[\\[${n}\\]](#src-${messageId}-${n})` : m,
-    );
-  }
-  ```
-- [ ] Для **стриминга** (когда `message.id === '__streaming__'` и текст ещё догоняет): рендерить источники сразу из `partialSources` (они уже пришли до первого delta), маркеры в тексте — препроцессить на лету. `messageId` для якорей — фиксированная строка `streaming`.
+- [x] Решение: **использовать `messageRendererRegistry`**. `content` — массив двух частей: сначала `{ type: ‘sources’, data: { sources, messageId } }` (рендерится как `SourcesBlock` сверху), потом `{ type: ‘text’, data: { text: preprocessed } }`. Registry зарегистрирован в `ChatStream` через `createMessageRendererRegistry` + `registerMessageRenderer` и передан в `MessageList` через `messageRendererRegistry`.
+- [x] Зарегистрировать кастомный тип контента `sources` через `createMessageRendererRegistry` + `registerMessageRenderer` и передать registry в `MessageList` через prop `messageRendererRegistry`.
+- [x] Компонент `<SourcesBlock messageId={...} sources={[...]} />`: вертикальный список карточек (Card из `@gravity-ui/uikit`), у каждой — `<a id="src-{messageId}-{position}">`, title (ссылка, target="_blank"), под title — host + favicon, snippet.
+- [x] Препроцесс текста — отдельная утилка `client/src/utils/citations.ts`.
+- [x] Для **стриминга**: источники рендерятся сразу из `partialSources`, маркеры препроцессятся на лету. `messageId` = `’streaming’`.
 
 ### 5.5. Загрузка источников при открытии чата
 
-- [ ] `client/src/services/chats.ts` или где сейчас `GET /api/chats/:id/messages` — ничего не менять, тип `Message.sources` подхватится автоматом (бэк начнёт его отдавать).
-- [ ] `chatStore.messages` — проверить, что Message с sources прокидывается в `toAikitMessage` → в `content` подкладываются обе части (`text` + `sources`). Если у сообщения `sources` нет — отдаём `content: string` как сейчас.
+- [x] `GET /api/chats/:id/messages` не менялся — `Message.sources` подтягивается автоматически.
+- [x] В `toAikitMessage` (в `ChatStream.tsx`) `sources` из `msg.sources` подкладываются в контент для assistant-сообщений.
 
 ## 6. Обновить спеки
 
@@ -223,15 +210,15 @@
 - [x] Проверить через `curl` SSE-выхлоп с `webSearch: true`.
 
 ### Этап 3 — фронт показывает блок «Источники»
-- [ ] Тогл «Web» в `settingsStore` + `ChatComposer`.
-- [ ] `webSearch` в `streamMessages` body.
-- [ ] SSE-эвент `sources` → `streamStore.partialSources`.
-- [ ] Кастомный renderer `sources` через registry, компонент `SourcesBlock`.
-- [ ] Препроцесс цитат `[N]` → Markdown-линки c якорями.
-- [ ] Поле `sources` в `chatStore.messages` (тип уже расширен).
+- [x] Тогл «Web» в `settingsStore` + `ChatComposer`.
+- [x] `webSearch` в `streamMessages` body.
+- [x] SSE-эвент `sources` → `streamStore.partialSources`.
+- [x] Кастомный renderer `sources` через registry, компонент `SourcesBlock`.
+- [x] Препроцесс цитат `[N]` → Markdown-линки c якорями.
+- [x] Поле `sources` в `chatStore.messages` (тип уже расширен).
 
 ### Этап 4 — стиль и проверка
-- [ ] CSS для `SourcesBlock`: компактный список карточек, hover на ссылках, mobile-first.
+- [x] CSS для `SourcesBlock`: компактный список карточек, hover на ссылках, mobile-first.
 - [ ] Smoke E2E (Playwright): включить тогл, задать вопрос, дождаться `sources`-блока, кликнуть `[1]` → проверить scroll к якорю.
 
 ## 8. Риски и открытые вопросы

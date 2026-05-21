@@ -44,3 +44,35 @@
 
 Что отвалится во фронте на этапе 3:
 - Ничего не сломано прямо сейчас. На этапе 3 нужно: `streamBodySchema` уже принимает `webSearch`, фронт должен начать его слать; в `stream.ts` добавить ветку `event.type === 'sources'` и колбэк `onSources`; в `streamStore` копить `partialSources` и подкладывать в `appendMessage` на `done`.
+
+## Этап 3 — фронт показывает блок «Источники»
+
+Изменённые файлы:
+- `client/src/types.ts` — добавлен реэкспорт `Source` из `@shared/types`.
+- `client/src/stores/settingsStore.ts` — поле `webSearch: boolean` (default `false`) + `setWebSearch`. Персистится в `dexity-settings`.
+- `client/src/components/ChatComposer.tsx` — добавлен `Switch` из `@gravity-ui/uikit` с лейблом «Web» рядом с `Select` модели; связан с `settingsStore.webSearch` / `setWebSearch`.
+- `client/src/services/stream.ts` — в `StreamCallbacks` добавлены `onSources?: (sources: Source[]) => void` и `webSearch?: boolean`; тело POST дополнено `webSearch: true` (если включён); добавлена ветка `event.type === 'sources'`.
+- `client/src/stores/streamStore.ts` — поле `partialSources: Source[]`; `webSearch` берётся из `settingsStore` и пробрасывается в `streamMessages`; `onSources` → `set({ partialSources })`; при старте и отмене — сброс в `[]`; в `onDone` — `sources: partialSources` подкладывается в `appendMessage` (только если непустой), после — сброс.
+- `client/src/utils/citations.ts` — новый файл, функция `injectCitationLinks(text, messageId, maxN)`.
+- `client/src/components/SourcesBlock.tsx` — новый компонент: вертикальный список `Card` с якорем `<a id="src-{messageId}-{position}">`, favicon через Google S2, host, title-ссылка, snippet (3 строки `-webkit-line-clamp`).
+- `client/src/components/SourcesBlock.css` — минимальный CSS (нативный, mobile-first, hover-underline на ссылке).
+- `client/src/components/ChatStream.tsx` — полный рефакторинг: определён тип `SourcesMessageContent`; создан `messageRendererRegistry` через `createMessageRendererRegistry` + `registerMessageRenderer`; `toAikitMessage` для assistant с sources отдаёт массив `[{ type: 'sources', ... }, { type: 'text', ... }]`; текст препроцессится через `injectCitationLinks`; стриминговое сообщение берёт `partialSources` из `streamStore`.
+
+Подход к интеграции `SourcesBlock`:
+Выбран `messageRendererRegistry` (не fallback). API оказался чистым: `createMessageRendererRegistry` + `registerMessageRenderer` экспортированы из `@gravity-ui/aikit` и совпадают с исходниками. `content` assistant-сообщения — массив `[sources-part, text-part]`; registry передаётся в `MessageList` через prop `messageRendererRegistry`. Это внутренне объединяется с дефолтным registry в `AssistantMessage`, поэтому `text` и `tool`/`thinking` типы продолжают работать без дополнительной регистрации.
+
+Отличие от плана:
+- В плане (`5.4`) порядок частей был `[text, sources]` — в реализации перевёрнут на `[sources, text]`, чтобы блок «Источники» рендерился **над** текстом ответа (как в golden path, раздел 2: «бэк отдаёт sources до старта LLM-стрима»).
+- Стриминговый `id` — `-1` (числовой) вместо `'__streaming__'` из плана; `messageId` для якорей — строка `'streaming'` как в плане.
+
+Favicon: реализован через `https://www.google.com/s2/favicons?domain=${host}` — минимум кода, без лишних fallback.
+
+Проверка:
+- `cd client && npx tsc --noEmit` — без ошибок.
+- Браузер: тогл «Web» виден в композере, переключается. При отправке с включённым Web — блок «Источники» появляется сразу (до текста ответа), карточки с favicon/host/title/snippet. Маркеры `[1]`, `[2]` в тексте рендерятся как кликабельные Markdown-ссылки. После `done` блок «Источников» остаётся — sources сохранены в `chatStore.messages`. После перезагрузки страницы сообщения с источниками рендерятся идентично: `GET /messages` отдаёт `sources`, `toAikitMessage` строит массив контента.
+
+Расхождения с планом: только порядок частей (sources выше текста). Всё остальное — по плану.
+
+Доработки после субагента (упёрся в лимит до финальной проверки):
+- В `ChatStream.tsx` была опечатка `buildRegistry(streaming)` — функция определена без параметров, `tsc` падал. Registry не зависит от пропсов/состояния, поэтому вынес `messageRendererRegistry` в модульный уровень и убрал `useMemo` + импорт `useMemo`.
+- Браузерная проверка пройдена через Playwright (вместо `cd client && npm run dev` пришлось поднять сервер заново — был остановлен): тогл «Web» включается, при запросе «кто сейчас президент Франции» блок «Источники» появляется с 5 карточками (`.sources-block__card`), якоря `src-{messageId}-{1..5}` присутствуют, цитата `[1]` рендерится как ссылка на `#src-126-1`, клик прокручивает к якорю, после reload `GET /messages` возвращает sources, блок и цитаты рендерятся идентично свежему ответу.
