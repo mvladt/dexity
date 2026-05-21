@@ -33,17 +33,39 @@
 
 ### 4.1. ENV / зависимости
 
-- [ ] **Новых env-переменных не нужно.** Переиспользуем существующий `YC_API_KEY` — достаточно вне кода добавить роль `search-api.executor` к тому же сервисному аккаунту (см. раздел 7, этап 0). `folderid` для поиска — тот же `YC_FOLDER_ID`.
+- [ ] **Новый env:** `YC_SEARCH_API_KEY` (отдельный API-ключ со scope `yc.search-api.execute`). Существующий `YC_API_KEY` используется для AI Studio (LLM) — его scope может не включать Search API, и смешивать назначения ключей нечисто. Создаём отдельный ключ на том же сервисном аккаунте (см. раздел 7, этап 0). `folderId` для поиска — тот же `YC_FOLDER_ID`.
 - [ ] Добавить одну зависимость на бэк: `fast-xml-parser` (~30KB, MIT, без транзитивных зависимостей). Парсить XML регэкспами — антипаттерн.
 
 ### 4.2. Сервис поиска (`server/src/services/search.ts`)
 
 - [ ] Создать модуль с одной функцией `webSearch(query: string, signal?: AbortSignal): Promise<Source[]>`.
 - [ ] Тип `Source`: `{ position: number; title: string; url: string; snippet: string }`.
-- [ ] Эндпоинт: `GET https://yandex.com/search/xml?folderid=${YC_FOLDER_ID}&query=${encodeURIComponent(query)}` с заголовком `Authorization: Api-Key ${YC_API_KEY}`.
-- [ ] Ответ — XML. Структура (упрощённо): `<yandexsearch><response><results><grouping><group><doc><url/><title/><passages><passage/></passages></doc></group></grouping></results></response></yandexsearch>`. Парсим через `fast-xml-parser` (`new XMLParser({ ignoreAttributes: true })`), достаём массив `doc`, маппим в `Source`. `title` и `passage` могут содержать `<hlword>foo</hlword>` — выкусываем теги простым `.replace(/<\/?hlword>/g, '')`.
+- [ ] Эндпоинт: `POST https://searchapi.api.cloud.yandex.net/v2/web/search` с заголовком `Authorization: Api-Key ${YC_SEARCH_API_KEY}`, `Content-Type: application/json`.
+- [ ] Тело запроса (JSON):
+  ```json
+  {
+    "query": {
+      "searchType": "SEARCH_TYPE_RU",
+      "queryText": "<пользовательский запрос, ≤400 симв.>",
+      "familyMode": "FAMILY_MODE_MODERATE",
+      "fixTypoMode": "FIX_TYPO_MODE_ON"
+    },
+    "groupSpec": {
+      "groupMode": "GROUP_MODE_FLAT",
+      "groupsOnPage": 5,
+      "docsInGroup": 1
+    },
+    "maxPassages": 3,
+    "l10n": "LOCALIZATION_RU",
+    "folderId": "<YC_FOLDER_ID>",
+    "responseFormat": "FORMAT_XML"
+  }
+  ```
+- [ ] Ответ — JSON `{ "rawData": "<base64>" }`. Декодируем: `Buffer.from(rawData, 'base64').toString('utf-8')`. Внутри — XML формата `<yandexsearch><response><results><grouping><group><doc><url/><domain/><title/><passages><passage/></passages></doc></group></grouping></results></response></yandexsearch>`. Парсим через `fast-xml-parser` (`new XMLParser({ ignoreAttributes: true })`), достаём массив `doc`, маппим в `Source`. `title` и `passage` могут содержать `<hlword>foo</hlword>` — выкусываем теги: `.replace(/<\/?hlword>/g, '')`. Учесть, что `fast-xml-parser` по умолчанию схлопывает одиночный элемент в объект (а не массив) — использовать опцию `isArray: (name) => ['doc','passage','group'].includes(name)` либо нормализовать вручную.
+- [ ] Перед запросом обрезать `queryText` до 400 символов (лимит API).
+- [ ] Обработка ошибок ответа: если внутри XML есть `<error code="...">…</error>` — лог + возврат `[]`. Если HTTP не 2xx — лог + `[]`.
 - [ ] Таймаут 5 сек (`AbortSignal.timeout(5_000)` + merge с переданным `signal`), при ошибке/таймауте/non-2xx — возвращать пустой массив + лог через `fastify.log` (логирование вынести в роут — сервис не знает про fastify).
-- [ ] Возвращать максимум **5** результатов (`groups-on-page=5` в query-параметрах). Снипы (passages) склеиваем через ` `, тримим до 400 символов.
+- [ ] Возвращать максимум **5** результатов (`groupSpec.groupsOnPage = 5`). Снипы (passages) склеиваем через ` `, тримим до 400 символов.
 - [ ] Никакого кэша на первой итерации.
 
 ### 4.3. БД: новая таблица `sources`
@@ -170,10 +192,24 @@
 
 ## 7. Пошаговый чек-лист
 
-### Этап 0 — доступ к Yandex Search API (делает пользователь вручную через `yc`)
-- [ ] Найти SA, на котором висит существующий `YC_API_KEY`: `yc iam api-key list --format json | jq '.[] | {id, service_account_id, created_at}'` → опознать по дате создания.
-- [ ] Добавить SA роль `search-api.executor`: `yc resource-manager folder add-access-binding $YC_FOLDER_ID --role search-api.executor --subject serviceAccount:<SA_ID>`.
-- [ ] Проверить curl'ом: `curl -sS "https://yandex.com/search/xml?folderid=$YC_FOLDER_ID&query=test" -H "Authorization: Api-Key $YC_API_KEY" | head -c 500` — должен прийти XML с `<response>`. Если пришёл `<error>` с описанием прав — роль не приклеилась (репликация IAM до 30 сек, подождать).
+### Этап 0 — доступ к Yandex Search API v2 (делает пользователь вручную через `yc`)
+
+> Старый v1-эндпоинт `yandex.com/search/xml` **выключен** (ошибка `4002: XML-search queries with the old version (v1) are forbidden`). Используем **Search API v2**: REST-эндпоинт `https://searchapi.api.cloud.yandex.net/v2/web/search`.
+
+- [x] (выбран) SA для Search API — `ajepn79g4psakc0u6f2a` (`ai-studio-e5b0ee`), тот же, что держит текущий `YC_API_KEY`.
+- [x] **Удалить ошибочно выданную роль `search-api.executor`** (она для устаревшего v1 API): `yc resource-manager folder remove-access-binding $YC_FOLDER_ID --role search-api.executor --subject serviceAccount:ajepn79g4psakc0u6f2a`.
+- [x] **Выдать актуальную роль `search-api.webSearch.user`**: `yc resource-manager folder add-access-binding $YC_FOLDER_ID --role search-api.webSearch.user --subject serviceAccount:ajepn79g4psakc0u6f2a`.
+- [x] **Создать отдельный API-ключ со scope `yc.search-api.execute`** (секрет показывается только при создании — записать сразу): `yc iam api-key create --service-account-id ajepn79g4psakc0u6f2a --scopes yc.search-api.execute --format json`. → ключ id `aje64vb6rbt3o4100tt8`.
+- [x] Добавить полученный секрет в `server/.env` как `YC_SEARCH_API_KEY=...`.
+- [x] Проверить curl'ом (подставить `$YC_FOLDER_ID` и `$YC_SEARCH_API_KEY`):
+  ```bash
+  curl -sS -X POST "https://searchapi.api.cloud.yandex.net/v2/web/search" \
+    -H "Authorization: Api-Key $YC_SEARCH_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"query\":{\"searchType\":\"SEARCH_TYPE_RU\",\"queryText\":\"test\"},\"groupSpec\":{\"groupMode\":\"GROUP_MODE_FLAT\",\"groupsOnPage\":3,\"docsInGroup\":1},\"folderId\":\"$YC_FOLDER_ID\",\"responseFormat\":\"FORMAT_XML\"}" \
+    | jq -r '.rawData' | base64 -d | head -c 800
+  ```
+  Должен прийти XML с `<yandexsearch><response>…<results>…</results>…</response>`. Если `<error code="...">` — читать `code`/текст (часто проблема в scope/роли, IAM может реплицироваться до 60 сек).
 
 ### Этап 1 — поиск работает изолированно
 - [ ] `cd server && npm install fast-xml-parser`.
@@ -201,7 +237,7 @@
 ## 8. Риски и открытые вопросы
 
 - **InlineCitation в aikit пустой** — нельзя на него рассчитывать. Решено: своя реализация через Markdown-линки + якоря.
-- **Платность Yandex Search.** Тариф уточнить. Возможно, имеет смысл ограничить триггер дополнительным гейтом (например, только для определённого пользователя), но в MVP не критично.
+- **Платность Yandex Search API v2.** Тариф уточнить (в MCP-ответе не нашлось точного прайса). Квоты по умолчанию: 10 RPS / 10 000 запросов в час sync — для личного проекта более чем достаточно.
 - **Лицензионные ограничения** Yandex Search для коммерческого использования. Для личного проекта (как заявлено в CLAUDE.md) — должно быть ОК.
 - **Markdown vs кастомный renderer для блока источников.** Если регистрация кастомного типа контента в `MessageList` окажется тяжёлой/неустойчивой (надо смотреть точный API в `MessageList.tsx`) — fallback: рендерить блок источников **рядом** с `MessageList`, через `messageExtraInfo` или просто следующим элементом в DOM, не залезая в registry.
 - **Стриминг + якоря.** Во время стрима `messageId` фиктивный (`streaming`); после `done` — настоящий. Якоря не должны ломаться. Проверить, что замена не вызывает мерцания (re-render Markdown’а на каждом delta — потенциальная проблема производительности; aikit уже обрабатывает «инкрементальный markdown», должно ОК).
