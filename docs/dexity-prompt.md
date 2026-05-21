@@ -18,7 +18,7 @@
 - `base_url = "https://ai.api.cloud.yandex.net/v1"`
 - Клиент: `openai` npm SDK
 - Дефолтная модель: `qwen3.6-35b-a3b`
-- Полный model id: `gpt://<folderId>/qwen3.6-35b-a3b/latest` — `folderId` подставляется из `YANDEX_FOLDER_ID` в `.env`
+- Полный model id: `gpt://<folderId>/qwen3.6-35b-a3b/latest` — `folderId` подставляется из `YC_FOLDER_ID` в `.env`
 - Переключение модели через `MODEL_ID` в `.env`
 
 **Деплой:** VPS Ubuntu (Timeweb), домен `dexity.mvladt.ru`, Nginx reverse proxy

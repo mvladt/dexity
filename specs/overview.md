@@ -41,13 +41,13 @@ dexity/
 | `PORT`             | Порт Fastify                                   | `3001`                  |
 | `NODE_ENV`         | Режим (`development` / `production`)           | `production`            |
 | `ACCESS_TOKEN`     | Единый токен авторизации                       | `mysecrettoken`         |
-| `YANDEX_FOLDER_ID` | ID каталога Yandex Cloud                       | `b1gxxxxxxxx`           |
-| `YANDEX_API_KEY`   | API-ключ Yandex Cloud (IAM или сервис-аккаунт) | `AQVN...`               |
+| `YC_FOLDER_ID` | ID каталога Yandex Cloud                       | `b1gxxxxxxxx`           |
+| `YC_API_KEY`   | API-ключ Yandex Cloud (IAM или сервис-аккаунт) | `AQVN...`               |
 | `MODEL_ID`         | ID модели (без folderId)                       | `qwen3-235b-a22b-fp8`   |
 | `DATABASE_PATH`    | Путь к файлу SQLite                            | `./data/db.sqlite3`     |
 | `CORS_ORIGIN`      | Origin для CORS (только в dev)                 | `http://localhost:5173` |
 
-Полный model id формируется на бэке: `` `gpt://${YANDEX_FOLDER_ID}/${MODEL_ID}/latest` ``
+Полный model id формируется на бэке: `` `gpt://${YC_FOLDER_ID}/${MODEL_ID}/latest` ``
 
 > **Yandex AI Studio (OpenAI-совместимый API):**
 >

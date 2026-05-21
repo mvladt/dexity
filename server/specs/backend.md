@@ -294,7 +294,7 @@ POST /api/chats/:chatId/messages/stream
 ├── 6. Вызвать Yandex AI Studio через openai npm SDK:
 │      const client = new OpenAI({
 │        baseURL: 'https://llm.api.cloud.yandex.net/v1',
-│        apiKey:  YANDEX_API_KEY,
+│        apiKey:  YC_API_KEY,
 │      })
 │      const stream = await client.chat.completions.create({
 │        model:   `gpt://${FOLDER_ID}/${MODEL_ID}/latest`,

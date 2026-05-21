@@ -22,7 +22,7 @@ dexity/
 
 ## Критичные решения
 
-- **Model ID** формируется на бэке: `` `gpt://${YANDEX_FOLDER_ID}/${MODEL_ID}/latest` ``
+- **Model ID** формируется на бэке: `` `gpt://${YC_FOLDER_ID}/${MODEL_ID}/latest` ``
 - **Drizzle** — только как query builder (типобезопасные select/insert/update). Без `drizzle-kit`, без CLI-миграций. Миграция — один `db.exec(...)` при старте (`server/src/db/migrate.ts`)
 - **Стриминг** — SSE: бэк проксирует поток от Yandex, фронт читает через `fetch` + `ReadableStream` (не `EventSource` — не поддерживает POST и `Authorization`)
 - **Контекст LLM** — бэк загружает полную историю из SQLite и передаёт в `messages[]` при каждом запросе
@@ -44,7 +44,7 @@ cd client && npm run dev
 
 ## ENV
 
-`server/.env`: `PORT`, `NODE_ENV`, `ACCESS_TOKEN`, `YANDEX_FOLDER_ID`, `YANDEX_API_KEY`, `MODEL_ID`, `DATABASE_PATH`, `CORS_ORIGIN`  
+`server/.env`: `PORT`, `NODE_ENV`, `ACCESS_TOKEN`, `YC_FOLDER_ID`, `YC_API_KEY`, `MODEL_ID`, `DATABASE_PATH`, `CORS_ORIGIN`  
 `client/.env`: `VITE_API_URL`
 
 ## Спецификация

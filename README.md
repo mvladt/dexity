@@ -43,8 +43,8 @@ npm install && npm run dev
 | ------------------ | --------------------------------- |
 | `PORT`             | Порт Fastify (напр. `3001`)       |
 | `ACCESS_TOKEN`     | Единый токен авторизации          |
-| `YANDEX_FOLDER_ID` | ID каталога Yandex Cloud          |
-| `YANDEX_API_KEY`   | API-ключ Yandex Cloud             |
+| `YC_FOLDER_ID` | ID каталога Yandex Cloud          |
+| `YC_API_KEY`   | API-ключ Yandex Cloud             |
 | `MODEL_ID`         | ID модели (напр. `qwen3-235b-a22b-fp8`) |
 | `DATABASE_PATH`    | Путь к SQLite (напр. `./data/db.sqlite3`) |
 | `CORS_ORIGIN`      | Origin фронта (только в dev)      |
