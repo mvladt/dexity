@@ -41,8 +41,8 @@ function toAikitMessage(
         id: messageId,
         timestamp: msg.createdAt,
         content: [
-          { type: 'sources', data: { sources, messageId } },
           { type: 'text', data: { text } },
+          { type: 'sources', data: { sources, messageId } },
         ],
       };
     }
