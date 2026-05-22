@@ -1,18 +1,11 @@
 import { Text } from '@gravity-ui/uikit';
 import type { Source } from '../types';
+import { hostOf } from '../utils/citations';
 import './SourcesBlock.css';
 
 interface Props {
   messageId: string;
   sources: Source[];
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
 }
 
 export function SourcesBlock({ messageId, sources }: Props) {

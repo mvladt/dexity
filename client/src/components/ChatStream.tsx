@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { MessageList, createMessageRendererRegistry, registerMessageRenderer } from '@gravity-ui/aikit';
 import type { TAssistantMessage, TChatMessage, TSubmitData, TMessageContent } from '@gravity-ui/aikit';
 import { useChatStore } from '../stores/chatStore';
@@ -32,7 +33,7 @@ function toAikitMessage(
   if (msg.role === 'assistant') {
     const sources = isStreaming ? (partialSources ?? []) : (msg.sources ?? []);
     const text = sources.length > 0
-      ? injectCitationLinks(msg.content, messageId, sources.length)
+      ? injectCitationLinks(msg.content, messageId, sources)
       : msg.content;
 
     if (sources.length > 0) {
@@ -129,9 +130,38 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     await startStream(chatId, data.content);
   };
 
+  const handleCitationClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const anchor = (e.target as HTMLElement).closest('a[href^="#src-"]');
+      if (!anchor) return;
+      e.preventDefault();
+
+      const href = anchor.getAttribute('href')!;
+      // href format: #src-<messageId>-<n>
+      const match = href.match(/^#src-(.+)-(\d+)$/);
+      if (!match) return;
+
+      const [, msgId, nStr] = match;
+      const n = Number(nStr);
+
+      let source: import('../types').Source | undefined;
+      if (msgId === 'streaming') {
+        source = partialSources.find((s) => s.position === n);
+      } else {
+        const msg = messages.find((m) => String(m.id) === msgId);
+        source = msg?.sources?.find((s) => s.position === n);
+      }
+
+      if (source?.url) {
+        window.open(source.url, '_blank', 'noopener,noreferrer');
+      }
+    },
+    [messages, partialSources],
+  );
+
   return (
     <div className="chat-content">
-      <div className="chat-messages">
+      <div className="chat-messages" onClick={handleCitationClick}>
         <MessageList<SourcesMessageContent>
           messages={displayMessages}
           status={streaming ? 'streaming' : 'ready'}
