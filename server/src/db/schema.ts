@@ -23,6 +23,7 @@ export const messages = sqliteTable(
       .references(() => chats.id, { onDelete: 'cascade' }),
     role: text('role', { enum: ['user', 'assistant'] }).notNull(),
     content: text('content').notNull(),
+    thinking: text('thinking'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   },
   (t) => ({

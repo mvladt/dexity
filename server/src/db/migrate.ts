@@ -20,6 +20,7 @@ export function migrate(db: Database.Database) {
       chat_id    INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
       role       TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
       content    TEXT    NOT NULL,
+      thinking   TEXT,
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -29,4 +30,10 @@ export function migrate(db: Database.Database) {
 
     INSERT OR IGNORE INTO users (id) VALUES (1);
   `);
+
+  // ALTER для уже существующих БД, где messages создалась до появления колонки thinking
+  const cols = db.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'thinking')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN thinking TEXT`);
+  }
 }

@@ -6,7 +6,12 @@ const BASE = import.meta.env.VITE_API_URL ?? '';
 interface StreamCallbacks {
   onThinkingDelta?: (delta: string) => void;
   onDelta: (delta: string) => void;
-  onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
+  onDone: (
+    fullContent: string,
+    assistantMessageId: number,
+    fullThinking?: string,
+    chatTitle?: string,
+  ) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
   signal?: AbortSignal;
   model?: string;
@@ -82,7 +87,12 @@ export async function streamMessages(
           } else if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
           } else if (event.type === 'done') {
-            callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
+            callbacks.onDone(
+              event.fullContent,
+              event.assistantMessageId,
+              event.fullThinking,
+              event.chatTitle,
+            );
           } else if (event.type === 'error') {
             callbacks.onError(event.code, event.message);
           }

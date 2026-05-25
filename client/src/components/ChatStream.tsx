@@ -13,6 +13,26 @@ import type { Message } from '../types';
 import { ChatComposer } from './ChatComposer';
 
 function toAikitMessage(msg: Message): TChatMessage {
+  // Assistant с сохранённым thinking → парты [{thinking, status:'thought'}, {text}]
+  if (msg.role === 'assistant' && msg.thinking) {
+    return {
+      role: 'assistant',
+      id: String(msg.id),
+      timestamp: msg.createdAt,
+      content: [
+        {
+          type: 'thinking',
+          data: {
+            content: msg.thinking,
+            status: 'thought',
+            defaultExpanded: false,
+            enabledCopy: true,
+          },
+        },
+        { type: 'text', data: { text: msg.content } },
+      ],
+    };
+  }
   return {
     role: msg.role,
     content: msg.content,

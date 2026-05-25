@@ -105,6 +105,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     request.raw.on('close', () => abort.abort());
 
     let fullContent = '';
+    let fullThinking = '';
 
     try {
       const stream = await streamChat(llmMessages, abort.signal, modelOverride);
@@ -114,7 +115,10 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         // OpenAI SDK не описывает reasoning_content — нестандартное поле от reasoning-моделей
         // (Qwen3, DeepSeek V3.2, GPT-OSS). YandexGPT его не присылает — блок просто не появится.
         const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
-        if (reasoning) writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+        if (reasoning) {
+          fullThinking += reasoning;
+          writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+        }
         if (delta.content) {
           fullContent += delta.content;
           writeSSE(reply, { type: 'delta', delta: delta.content });
@@ -124,7 +128,12 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       // Save assistant message
       const [assistantMsg] = await db
         .insert(messages)
-        .values({ chatId, role: 'assistant', content: fullContent })
+        .values({
+          chatId,
+          role: 'assistant',
+          content: fullContent,
+          thinking: fullThinking || null,
+        })
         .returning();
 
       // Update chat updated_at
@@ -147,6 +156,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         type: 'done',
         fullContent,
         assistantMessageId: assistantMsg.id,
+        ...(fullThinking ? { fullThinking } : {}),
         ...(chatTitle ? { chatTitle } : {}),
       });
     } catch (err: unknown) {

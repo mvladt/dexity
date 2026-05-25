@@ -46,12 +46,13 @@ export const useStreamStore = create<StreamStore>()((set) => ({
 
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 
-      onDone: (fullContent, assistantMessageId, chatTitle) => {
+      onDone: (fullContent, assistantMessageId, fullThinking, chatTitle) => {
         appendMessage({
           id: assistantMessageId,
           chatId,
           role: 'assistant',
           content: fullContent,
+          thinking: fullThinking ?? null,
           createdAt: new Date().toISOString(),
         });
         if (chatTitle) patchChatTitle(chatId, chatTitle);

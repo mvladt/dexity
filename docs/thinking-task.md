@@ -111,7 +111,7 @@ if (delta.content) {
 - [x] 4. `stream.ts` — обработать новый эвент
 - [x] 5. `ChatStream.tsx` — рендерить `<ThinkingMessage>` во время стриминга над контентом — реализовано через нативный `messageRendererRegistry` aikit (parts массив с `{type:'thinking'}`), а не отдельным блоком над `MessageList`. Чище.
 - [x] 6. Проверить вживую: ✅ Qwen3.6 (3.6) и DeepSeek V3.2 — блок появляется. ❌ Qwen3 235B и Alice AI — не возвращают `reasoning_content` по умолчанию. Зафиксировано в `docs/thinking-models-task.md`.
-- [ ] 7. **Хранение в БД** — добавить колонку `thinking` в `messages`, сохранять, рендерить свёрнутый блок в истории.
+- [x] 7. **Хранение в БД** — колонка `thinking` в `messages` (миграция через `ALTER` + `PRAGMA table_info`); бэк копит `fullThinking`, кладёт в insert и шлёт в `done`-эвенте; фронт собирает свёрнутый `{type:'thinking', status:'thought', defaultExpanded:false, enabledCopy:true}` парт + текстовый парт в `toAikitMessage`.
 
 ## Что НЕ делаем сейчас
 
