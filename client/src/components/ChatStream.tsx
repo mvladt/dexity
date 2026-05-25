@@ -75,11 +75,12 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
 
   const streamingParts: TAssistantMessageContent = [];
   if (partialThinking) {
+    // Как только пошёл основной content — reasoning-фаза завершилась.
     streamingParts.push({
       type: 'thinking',
       data: {
         content: partialThinking,
-        status: 'thinking',
+        status: partialContent ? 'thought' : 'thinking',
         defaultExpanded: true,
       },
     });
