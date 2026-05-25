@@ -110,10 +110,14 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       const stream = await streamChat(llmMessages, abort.signal, modelOverride);
 
       for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta?.content ?? '';
-        if (delta) {
-          fullContent += delta;
-          writeSSE(reply, { type: 'delta', delta });
+        const delta = chunk.choices[0]?.delta ?? {};
+        // OpenAI SDK не описывает reasoning_content — нестандартное поле от reasoning-моделей
+        // (Qwen3, DeepSeek V3.2, GPT-OSS). YandexGPT его не присылает — блок просто не появится.
+        const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
+        if (reasoning) writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+        if (delta.content) {
+          fullContent += delta.content;
+          writeSSE(reply, { type: 'delta', delta: delta.content });
         }
       }
 

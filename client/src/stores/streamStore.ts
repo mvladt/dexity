@@ -6,6 +6,7 @@ import { useSettingsStore } from './settingsStore';
 interface StreamStore {
   streaming: boolean;
   partialContent: string;
+  partialThinking: string;
   error: { code: 'auth' | 'quota' | 'server'; message: string } | null;
   startStream: (chatId: number, content: string) => Promise<void>;
   cancel: () => void;
@@ -17,6 +18,7 @@ let abortController: AbortController | null = null;
 export const useStreamStore = create<StreamStore>()((set) => ({
   streaming: false,
   partialContent: '',
+  partialThinking: '',
   error: null,
 
   clearError: () => set({ error: null }),
@@ -24,12 +26,12 @@ export const useStreamStore = create<StreamStore>()((set) => ({
   cancel: () => {
     abortController?.abort();
     abortController = null;
-    set({ streaming: false, partialContent: '' });
+    set({ streaming: false, partialContent: '', partialThinking: '' });
   },
 
   startStream: async (chatId, content) => {
     abortController = new AbortController();
-    set({ streaming: true, partialContent: '', error: null });
+    set({ streaming: true, partialContent: '', partialThinking: '', error: null });
     const { appendMessage, patchChatTitle } = useChatStore.getState();
 
     const { model, systemPrompt } = useSettingsStore.getState();
@@ -38,6 +40,9 @@ export const useStreamStore = create<StreamStore>()((set) => ({
       signal: abortController.signal,
       model,
       systemPrompt: systemPrompt || undefined,
+
+      onThinkingDelta: (delta) =>
+        set((s) => ({ partialThinking: s.partialThinking + delta })),
 
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 
@@ -50,11 +55,16 @@ export const useStreamStore = create<StreamStore>()((set) => ({
           createdAt: new Date().toISOString(),
         });
         if (chatTitle) patchChatTitle(chatId, chatTitle);
-        set({ streaming: false, partialContent: '' });
+        set({ streaming: false, partialContent: '', partialThinking: '' });
       },
 
       onError: (code, message) => {
-        set({ streaming: false, partialContent: '', error: { code, message } });
+        set({
+          streaming: false,
+          partialContent: '',
+          partialThinking: '',
+          error: { code, message },
+        });
       },
     });
 

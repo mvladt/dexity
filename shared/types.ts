@@ -15,6 +15,7 @@ export interface Message {
 }
 
 export type SSEEvent =
+  | { type: 'thinking_delta'; delta: string }
   | { type: 'delta'; delta: string }
   | { type: 'done'; fullContent: string; assistantMessageId: number; chatTitle?: string }
   | { type: 'error'; code: 'auth' | 'quota' | 'server'; message: string };

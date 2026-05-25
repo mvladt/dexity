@@ -1,5 +1,10 @@
 import { MessageList } from '@gravity-ui/aikit';
-import type { TAssistantMessage, TChatMessage, TSubmitData } from '@gravity-ui/aikit';
+import type {
+  TAssistantMessage,
+  TAssistantMessageContent,
+  TChatMessage,
+  TSubmitData,
+} from '@gravity-ui/aikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore } from '../stores/streamStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -42,15 +47,37 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const messages = useChatStore((s) => s.messages);
   const streaming = useStreamStore((s) => s.streaming);
   const partialContent = useStreamStore((s) => s.partialContent);
+  const partialThinking = useStreamStore((s) => s.partialThinking);
   const startStream = useStreamStore((s) => s.startStream);
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
 
+  const streamingParts: TAssistantMessageContent = [];
+  if (partialThinking) {
+    streamingParts.push({
+      type: 'thinking',
+      data: {
+        content: partialThinking,
+        status: 'thinking',
+        defaultExpanded: true,
+      },
+    });
+  }
+  if (partialContent) {
+    streamingParts.push({ type: 'text', data: { text: partialContent } });
+  }
+
   const displayMessages: TChatMessage[] = [
     ...messages.map(toAikitMessage),
     ...(streaming
-      ? [{ role: 'assistant' as const, content: partialContent, id: '__streaming__' }]
+      ? [
+          {
+            role: 'assistant' as const,
+            content: streamingParts.length > 0 ? streamingParts : '',
+            id: '__streaming__',
+          },
+        ]
       : []),
   ];
 

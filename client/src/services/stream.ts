@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 const BASE = import.meta.env.VITE_API_URL ?? '';
 
 interface StreamCallbacks {
+  onThinkingDelta?: (delta: string) => void;
   onDelta: (delta: string) => void;
   onDone: (fullContent: string, assistantMessageId: number, chatTitle?: string) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
@@ -76,7 +77,9 @@ export async function streamMessages(
             continue;
           }
 
-          if (event.type === 'delta') {
+          if (event.type === 'thinking_delta') {
+            callbacks.onThinkingDelta?.(event.delta);
+          } else if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
           } else if (event.type === 'done') {
             callbacks.onDone(event.fullContent, event.assistantMessageId, event.chatTitle);
