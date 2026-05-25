@@ -89,9 +89,11 @@ try {
 ## Замечание о `request.raw.on('close')`
 
 В роуте уже есть:
+
 ```ts
-request.raw.on('close', () => abort.abort());
+request.raw.on("close", () => abort.abort());
 ```
+
 Этот обработчик аборает upstream OpenAI-стрим при отключении клиента. Можно расширить: добавить флаг `clientDisconnected = true` и проверять его перед `db.insert`. Тогда оба сценария (клиент ушёл / чат удалён) обрабатываются единообразно.
 
 ## Затронутые файлы

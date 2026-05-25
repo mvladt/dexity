@@ -40,10 +40,15 @@ Yandex Cloud SSE chunk
 
 ```ts
 export type SSEEvent =
-  | { type: 'thinking_delta'; delta: string }   // ←  новое
-  | { type: 'delta'; delta: string }
-  | { type: 'done'; fullContent: string; assistantMessageId: number; chatTitle?: string }
-  | { type: 'error'; code: 'auth' | 'quota' | 'server'; message: string };
+  | { type: "thinking_delta"; delta: string } // ←  новое
+  | { type: "delta"; delta: string }
+  | {
+      type: "done";
+      fullContent: string;
+      assistantMessageId: number;
+      chatTitle?: string;
+    }
+  | { type: "error"; code: "auth" | "quota" | "server"; message: string };
 ```
 
 ### 2. Бэк — `server/src/routes/messages.ts`
@@ -53,10 +58,10 @@ export type SSEEvent =
 ```ts
 const delta = chunk.choices[0]?.delta ?? {};
 const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
-if (reasoning) writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+if (reasoning) writeSSE(reply, { type: "thinking_delta", delta: reasoning });
 if (delta.content) {
   fullContent += delta.content;
-  writeSSE(reply, { type: 'delta', delta: delta.content });
+  writeSSE(reply, { type: "delta", delta: delta.content });
 }
 ```
 
@@ -69,6 +74,7 @@ if (delta.content) {
 ### 4. Фронт — `client/src/stores/streamStore.ts`
 
 Добавить:
+
 - `partialThinking: string`
 - сбрасывать в `cancel` и в начале `startStream`
 - в `onThinkingDelta` дописывать

@@ -32,11 +32,12 @@
 
 ## Сетевые запросы
 
-| Метод    | URL                             | Статус | Тело ответа                                                                                                                  |
-| -------- | ------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `DELETE` | `http://localhost:3001/api/chats/:id` | **400**    | `{"statusCode":400,"code":"FST_ERR_CTP_EMPTY_JSON_BODY","error":"Bad Request","message":"Body cannot be empty when content-type is set to 'application/json'"}` |
+| Метод    | URL                                   | Статус  | Тело ответа                                                                                                                                                     |
+| -------- | ------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DELETE` | `http://localhost:3001/api/chats/:id` | **400** | `{"statusCode":400,"code":"FST_ERR_CTP_EMPTY_JSON_BODY","error":"Bad Request","message":"Body cannot be empty when content-type is set to 'application/json'"}` |
 
 **Заголовки запроса (проблемный):**
+
 ```
 Authorization: Bearer kakako
 Content-Type: application/json
@@ -79,7 +80,7 @@ Content-Type: application/json
 
 ```typescript
 // client/src/services/api.ts, строка 7
-const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+const headers: Record<string, string> = { "Content-Type": "application/json" };
 ```
 
 Метод `api.delete()` (строки 43–46) отправляет запрос **без тела**, но с этим заголовком:

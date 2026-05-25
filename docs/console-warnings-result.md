@@ -13,6 +13,7 @@ Vite экстернализирует Node.js-модули, на которые 
 **Модули:** `path`, `fs`, `url`, `process`, `source-map-js`
 
 **Пример:**
+
 ```
 Module "path" has been externalized for browser compatibility.
 Cannot access "path.isAbsolute" in client code.
@@ -21,6 +22,7 @@ Cannot access "path.isAbsolute" in client code.
 **Источник:** `@gravity-ui/aikit.js` (внутренний код библиотеки, не наш)
 
 **Затронутые API:**
+
 - `process.platform`
 - `path.isAbsolute`, `path.resolve`, `path.dirname`, `path.join`, `path.relative`, `path.sep`
 - `fs.existsSync`, `fs.readFileSync`
@@ -44,6 +46,7 @@ to opt-in early.
 ```
 
 **Решение:** добавить `future` флаги при создании роутера:
+
 ```ts
 future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
 ```
@@ -75,9 +78,9 @@ Failed to load resource: the server responded with a status of 404 (Not Found)
 
 ## Приоритеты
 
-| #  | Группа                        | Сложность | Приоритет |
-|----|-------------------------------|-----------|-----------|
-| 1  | React Router future flags     | низкая    | высокий   |
-| 2  | favicon.ico 404               | низкая    | высокий   |
-| 3  | autocomplete на input         | низкая    | средний   |
-| 4  | @gravity-ui/aikit Node-модули | средняя   | низкий    |
+| #   | Группа                        | Сложность | Приоритет |
+| --- | ----------------------------- | --------- | --------- |
+| 1   | React Router future flags     | низкая    | высокий   |
+| 2   | favicon.ico 404               | низкая    | высокий   |
+| 3   | autocomplete на input         | низкая    | средний   |
+| 4   | @gravity-ui/aikit Node-модули | средняя   | низкий    |

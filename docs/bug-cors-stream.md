@@ -21,10 +21,10 @@ No 'Access-Control-Allow-Origin' header is present on the requested resource.
 
 ```ts
 reply.raw.writeHead(200, {
-  'Content-Type': 'text/event-stream',
-  'Cache-Control': 'no-cache',
-  'Connection': 'keep-alive',
-  'X-Accel-Buffering': 'no',
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
 });
 ```
 
@@ -51,11 +51,11 @@ Access-Control-Allow-Origin: http://localhost:5173
 
 ```ts
 reply.raw.writeHead(200, {
-  'Content-Type': 'text/event-stream',
-  'Cache-Control': 'no-cache',
-  'Connection': 'keep-alive',
-  'X-Accel-Buffering': 'no',
-  'Access-Control-Allow-Origin': config.CORS_ORIGIN,
+  "Content-Type": "text/event-stream",
+  "Cache-Control": "no-cache",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+  "Access-Control-Allow-Origin": config.CORS_ORIGIN,
 });
 ```
 

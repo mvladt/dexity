@@ -8,13 +8,13 @@
 
 ### Что подтверждено через `RAW_CHUNK`-лог
 
-| Модель                  | reasoning_content по умолчанию |
-|-------------------------|--------------------------------|
-| `qwen3.6-35b-a3b`       | ✅ есть                         |
-| `deepseek-v32`          | ✅ есть                         |
-| `qwen3-235b-a22b-fp8`   | ❌ нет (одно из состояний пользователя)  |
-| `aliceai-llm`           | ❌ нет                          |
-| `yandexgpt`, `yandexgpt-lite`, `yandexgpt-32k` | ❌ нет (модели без reasoning) |
+| Модель                                         | reasoning_content по умолчанию          |
+| ---------------------------------------------- | --------------------------------------- |
+| `qwen3.6-35b-a3b`                              | ✅ есть                                 |
+| `deepseek-v32`                                 | ✅ есть                                 |
+| `qwen3-235b-a22b-fp8`                          | ❌ нет (одно из состояний пользователя) |
+| `aliceai-llm`                                  | ❌ нет                                  |
+| `yandexgpt`, `yandexgpt-lite`, `yandexgpt-32k` | ❌ нет (модели без reasoning)           |
 
 (`gpt-oss-*` — не проверяли.)
 
@@ -46,8 +46,14 @@
 4. Если нет — попробовать модель с флагом:
    ```ts
    client.chat.completions.create(
-     { model, messages, stream: true,
-       ...({ chat_template_kwargs: { enable_thinking: true } } as Record<string, unknown>),
+     {
+       model,
+       messages,
+       stream: true,
+       ...({ chat_template_kwargs: { enable_thinking: true } } as Record<
+         string,
+         unknown
+       >),
      },
      { signal },
    );
