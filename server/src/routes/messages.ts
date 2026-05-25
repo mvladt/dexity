@@ -1,9 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, asc, desc, sql } from 'drizzle-orm';
+import type { MessageToolData, Source } from '../../../shared/types.js';
 import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
 import { streamChat } from '../services/llm.js';
+import { webSearch } from '../services/search.js';
 import { config } from '../config.js';
 
 const chatIdSchema = z.coerce.number().int().positive();
@@ -11,7 +13,19 @@ const streamBodySchema = z.object({
   content: z.string().min(1).max(10_000),
   model: z.string().optional(),
   systemPrompt: z.string().max(4000).optional(),
+  webSearch: z.boolean().optional(),
 });
+
+function buildSearchPromptBlock(sources: Source[]): string {
+  const lines = sources.map(
+    (s) => `[${s.position}] ${s.title} (${s.url})\n${s.snippet}`,
+  );
+  return [
+    'Актуальная информация из веб-поиска (используй её при ответе):',
+    '',
+    ...lines,
+  ].join('\n');
+}
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -37,7 +51,12 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       .from(messages)
       .where(eq(messages.chatId, idResult.data))
       .orderBy(asc(messages.createdAt));
-    return reply.send(rows);
+    return reply.send(
+      rows.map((r) => ({
+        ...r,
+        toolData: r.toolData ? (JSON.parse(r.toolData) as MessageToolData) : null,
+      })),
+    );
   });
 
   fastify.post('/api/chats/:chatId/messages/stream', async (request, reply) => {
@@ -50,6 +69,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const userContent = bodyResult.data.content;
     const modelOverride = bodyResult.data.model;
     const systemPrompt = bodyResult.data.systemPrompt?.trim() || undefined;
+    const webSearchEnabled = bodyResult.data.webSearch === true;
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
@@ -76,13 +96,6 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       .values({ chatId, role: 'user', content: userContent })
       .returning();
 
-    // Build LLM context
-    const llmMessages = [
-      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-      ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user' as const, content: userContent },
-    ];
-
     // Open SSE
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -106,8 +119,43 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
     let fullContent = '';
     let fullThinking = '';
+    let toolData: MessageToolData | null = null;
+    let searchPromptBlock: string | null = null;
 
     try {
+      // Web Search — синхронно перед LLM, шлём loading → success/error
+      if (webSearchEnabled) {
+        writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading' } });
+        try {
+          const sources = await webSearch(userContent, abort.signal);
+          writeSSE(reply, {
+            type: 'tool',
+            tool: { name: 'web', status: 'success', sources },
+          });
+          if (sources.length > 0) {
+            toolData = { sources };
+            searchPromptBlock = buildSearchPromptBlock(sources);
+          } else {
+            searchPromptBlock = 'Веб-поиск не дал результатов. Отвечай по своим знаниям.';
+          }
+        } catch (err) {
+          if (abort.signal.aborted) return;
+          request.log.warn({ err }, 'Web search failed');
+          writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error' } });
+          searchPromptBlock = 'Веб-поиск не сработал. Отвечай по своим знаниям.';
+        }
+      }
+
+      // Build LLM context (user systemPrompt + search prompt block если есть)
+      const systemContent = [systemPrompt, searchPromptBlock]
+        .filter(Boolean)
+        .join('\n\n');
+      const llmMessages = [
+        ...(systemContent ? [{ role: 'system' as const, content: systemContent }] : []),
+        ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        { role: 'user' as const, content: userContent },
+      ];
+
       const stream = await streamChat(llmMessages, abort.signal, modelOverride);
 
       for await (const chunk of stream) {
@@ -133,6 +181,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           role: 'assistant',
           content: fullContent,
           thinking: fullThinking || null,
+          toolData: toolData ? JSON.stringify(toolData) : null,
         })
         .returning();
 
@@ -157,6 +206,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         fullContent,
         assistantMessageId: assistantMsg.id,
         ...(fullThinking ? { fullThinking } : {}),
+        ...(toolData ? { fullTool: toolData } : {}),
         ...(chatTitle ? { chatTitle } : {}),
       });
     } catch (err: unknown) {

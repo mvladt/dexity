@@ -5,32 +5,108 @@ import type {
   TChatMessage,
   TSubmitData,
 } from '@gravity-ui/aikit';
+import { Globe } from '@gravity-ui/icons';
+import { Icon } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
-import { useStreamStore } from '../stores/streamStore';
+import { useStreamStore, type ToolState } from '../stores/streamStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { getModel } from '../models';
-import type { Message } from '../types';
+import type { Message, Source } from '../types';
 import { ChatComposer } from './ChatComposer';
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+function SourcesList({ sources }: { sources: Source[] }) {
+  return (
+    <ul className="dx-sources-list">
+      {sources.map((s) => {
+        const host = hostOf(s.url);
+        return (
+          <li key={s.position}>
+            <a href={s.url} target="_blank" rel="noopener noreferrer">
+              <img
+                src={`https://www.google.com/s2/favicons?domain=${host}&sz=32`}
+                alt=""
+                width={16}
+                height={16}
+              />
+              <span className="dx-sources-list__host">{host}</span>
+              <span className="dx-sources-list__title">{s.title}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function buildToolPart(tool: ToolState) {
+  const base = {
+    toolName: 'Web Search',
+    toolIcon: <Icon data={Globe} size={16} />,
+  };
+  if (tool.status === 'loading') {
+    return {
+      type: 'tool' as const,
+      data: { ...base, status: 'loading' as const, headerContent: 'Yandex Search…' },
+    };
+  }
+  if (tool.status === 'error') {
+    return {
+      type: 'tool' as const,
+      data: {
+        ...base,
+        status: 'error' as const,
+        headerContent: 'Поиск не сработал',
+      },
+    };
+  }
+  // success
+  return {
+    type: 'tool' as const,
+    data: {
+      ...base,
+      status: 'success' as const,
+      headerContent:
+        tool.sources.length > 0
+          ? `${tool.sources.length} источников`
+          : 'Источники не найдены',
+      bodyContent: tool.sources.length > 0 ? <SourcesList sources={tool.sources} /> : null,
+      autoCollapseOnSuccess: true,
+    },
+  };
+}
+
 function toAikitMessage(msg: Message): TChatMessage {
-  // Assistant с сохранённым thinking → парты [{thinking, status:'thought'}, {text}]
-  if (msg.role === 'assistant' && msg.thinking) {
+  // Assistant с сохранёнными thinking / sources — собираем массив партов.
+  if (msg.role === 'assistant' && (msg.thinking || msg.toolData?.sources?.length)) {
+    const parts: TAssistantMessageContent = [];
+    if (msg.thinking) {
+      parts.push({
+        type: 'thinking',
+        data: {
+          content: msg.thinking,
+          status: 'thought',
+          defaultExpanded: false,
+          enabledCopy: true,
+        },
+      });
+    }
+    if (msg.toolData?.sources?.length) {
+      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
+    }
+    parts.push({ type: 'text', data: { text: msg.content } });
     return {
       role: 'assistant',
       id: String(msg.id),
       timestamp: msg.createdAt,
-      content: [
-        {
-          type: 'thinking',
-          data: {
-            content: msg.thinking,
-            status: 'thought',
-            defaultExpanded: false,
-            enabledCopy: true,
-          },
-        },
-        { type: 'text', data: { text: msg.content } },
-      ],
+      content: parts,
     };
   }
   return {
@@ -68,14 +144,19 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const streaming = useStreamStore((s) => s.streaming);
   const partialContent = useStreamStore((s) => s.partialContent);
   const partialThinking = useStreamStore((s) => s.partialThinking);
+  const partialTool = useStreamStore((s) => s.partialTool);
   const startStream = useStreamStore((s) => s.startStream);
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
 
+  // Порядок партов во время стриминга: tool → thinking → text.
+  // (tool вызывается до LLM, thinking приходит до основного контента.)
   const streamingParts: TAssistantMessageContent = [];
+  if (partialTool) {
+    streamingParts.push(buildToolPart(partialTool));
+  }
   if (partialThinking) {
-    // Как только пошёл основной content — reasoning-фаза завершилась.
     streamingParts.push({
       type: 'thinking',
       data: {

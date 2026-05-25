@@ -1,4 +1,4 @@
-import type { SSEEvent } from '../types';
+import type { MessageToolData, SSEEvent, Source } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -6,16 +6,19 @@ const BASE = import.meta.env.VITE_API_URL ?? '';
 interface StreamCallbacks {
   onThinkingDelta?: (delta: string) => void;
   onDelta: (delta: string) => void;
+  onTool?: (status: 'loading' | 'success' | 'error', sources?: Source[]) => void;
   onDone: (
     fullContent: string,
     assistantMessageId: number,
     fullThinking?: string,
+    fullTool?: MessageToolData,
     chatTitle?: string,
   ) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
   signal?: AbortSignal;
   model?: string;
   systemPrompt?: string;
+  webSearch?: boolean;
 }
 
 export async function streamMessages(
@@ -38,6 +41,7 @@ export async function streamMessages(
         content,
         ...(callbacks.model ? { model: callbacks.model } : {}),
         ...(callbacks.systemPrompt ? { systemPrompt: callbacks.systemPrompt } : {}),
+        ...(callbacks.webSearch ? { webSearch: true } : {}),
       }),
       signal,
     });
@@ -86,11 +90,14 @@ export async function streamMessages(
             callbacks.onThinkingDelta?.(event.delta);
           } else if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
+          } else if (event.type === 'tool') {
+            callbacks.onTool?.(event.tool.status, event.tool.sources);
           } else if (event.type === 'done') {
             callbacks.onDone(
               event.fullContent,
               event.assistantMessageId,
               event.fullThinking,
+              event.fullTool,
               event.chatTitle,
             );
           } else if (event.type === 'error') {

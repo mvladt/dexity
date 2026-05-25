@@ -21,6 +21,7 @@ export function migrate(db: Database.Database) {
       role       TEXT    NOT NULL CHECK(role IN ('user', 'assistant')),
       content    TEXT    NOT NULL,
       thinking   TEXT,
+      tool_data  TEXT,
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -31,9 +32,9 @@ export function migrate(db: Database.Database) {
     INSERT OR IGNORE INTO users (id) VALUES (1);
   `);
 
-  // ALTER для уже существующих БД, где messages создалась до появления колонки thinking
+  // ALTER для уже существующих БД (новые колонки messages)
   const cols = db.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[];
-  if (!cols.some((c) => c.name === 'thinking')) {
-    db.exec(`ALTER TABLE messages ADD COLUMN thinking TEXT`);
-  }
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has('thinking')) db.exec(`ALTER TABLE messages ADD COLUMN thinking TEXT`);
+  if (!names.has('tool_data')) db.exec(`ALTER TABLE messages ADD COLUMN tool_data TEXT`);
 }

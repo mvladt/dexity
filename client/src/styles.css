@@ -168,6 +168,52 @@ body,
   }
 }
 
+/* ── Sources list внутри ToolMessage bodyContent ─────────────── */
+
+.dx-sources-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dx-sources-list a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  color: var(--g-color-text-primary);
+  text-decoration: none;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.dx-sources-list a:hover {
+  background: var(--g-color-base-simple-hover);
+}
+
+.dx-sources-list img {
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+
+.dx-sources-list__host {
+  color: var(--g-color-text-secondary);
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.dx-sources-list__title {
+  color: var(--g-color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .chat-empty {
   flex: 1;
   display: flex;
