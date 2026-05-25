@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { MessageList } from '@gravity-ui/aikit';
 import type {
   TAssistantMessage,
@@ -85,8 +86,12 @@ function buildToolPart(tool: ToolState) {
 
 function toAikitMessage(msg: Message): TChatMessage {
   // Assistant с сохранёнными thinking / sources — собираем массив партов.
+  // Порядок такой же, как в streamingParts ниже: tool → thinking → text.
   if (msg.role === 'assistant' && (msg.thinking || msg.toolData?.sources?.length)) {
     const parts: TAssistantMessageContent = [];
+    if (msg.toolData?.sources?.length) {
+      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
+    }
     if (msg.thinking) {
       parts.push({
         type: 'thinking',
@@ -97,9 +102,6 @@ function toAikitMessage(msg: Message): TChatMessage {
           enabledCopy: true,
         },
       });
-    }
-    if (msg.toolData?.sources?.length) {
-      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
     }
     parts.push({ type: 'text', data: { text: msg.content } });
     return {
@@ -194,9 +196,21 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     await startStream(chatId, data.content);
   };
 
+  // Sticky-bottom при стриминге / новых сообщениях: если пользователь возле дна,
+  // следуем за контентом. Если он ушёл вверх читать — не дёргаем.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceFromBottom < 120) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [partialContent, partialThinking, partialTool, messages.length]);
+
   return (
     <div className="chat-content">
-      <div className="chat-messages">
+      <div className="chat-messages" ref={scrollRef}>
         <MessageList
           messages={displayMessages}
           status={streaming ? 'streaming' : 'ready'}
