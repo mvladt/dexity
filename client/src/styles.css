@@ -163,20 +163,6 @@ body,
   min-width: 0;
 }
 
-.chat-composer-disclaimer {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-@media (max-width: 480px) {
-  .chat-composer-disclaimer {
-    display: none;
-  }
-}
-
 /* ── Sources list внутри ToolMessage bodyContent ─────────────── */
 
 .dx-sources-list {
