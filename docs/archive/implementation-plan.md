@@ -9,7 +9,7 @@
 - [x] 3. `server/src/plugins/auth.ts` + `src/routes/auth.ts`
 - [x] 4. `server/src/routes/chats.ts` — CRUD чатов
 - [x] 5. `server/src/services/llm.ts` + `src/routes/messages.ts` — стриминг + авто-заголовок
-- [ ] 6. **Smoke-тест через `curl`**: логин → создать чат → отправить сообщение → прочитать SSE
+- [x] 6. **Smoke-тест через `curl`**: логин → создать чат → отправить сообщение → прочитать SSE
 
 ## Фронтенд
 
@@ -18,7 +18,7 @@
 - [x] 9. `client/src/services/{api,stream}.ts`
 - [x] 10. `client/src/pages/LoginPage.tsx` + Route Guard
 - [x] 11. `client/src/pages/ChatPage.tsx` + компоненты: `ChatSidebar`, `ChatStream`, `ThemeSwitcher`
-- [ ] 12. **Smoke-тест в браузере**: полный цикл от логина до стриминга
+- [x] 12. **Smoke-тест в браузере**: полный цикл от логина до стриминга
 
 ## Деплой
 
