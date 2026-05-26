@@ -135,5 +135,5 @@ export type SSEEvent =
 - [x] 6. `stream.ts` — обработка `{type:'tool'}`, передача `webSearch` в body POST, `fullTool` в `onDone`.
 - [x] 7. `ChatComposer` — `<Switch>Web</Switch>` рядом с Select модели.
 - [x] 8. `ChatStream.toAikitMessage` + streaming-parts — порядок **`tool → thinking → text`** (tool первым, т.к. вызывается до LLM). Inline `<SourcesList>` рендерит favicon + host + title (без snippet) в `bodyContent`. CSS — `.dx-sources-list` в `styles.css`.
-- [ ] 9. Тест вживую (требует `YC_SEARCH_API_KEY` в `server/.env`).
-- [ ] 10. Коммит.
+- [x] 9. Тест вживую (требует `YC_SEARCH_API_KEY` в `server/.env`).
+- [x] 10. Коммит (`68cc3a0 Web Search через нативный ToolMessage aikit`).
