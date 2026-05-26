@@ -4,6 +4,12 @@
   padding: 0;
 }
 
+:root {
+  /* Поднимаем основной текстовый размер aikit/uikit на одну ступень. */
+  --g-text-body-2-font-size: 17px;
+  --g-text-body-2-line-height: 24px;
+}
+
 html,
 body,
 #root {
