@@ -4,12 +4,11 @@
   padding: 0;
 }
 
-/* Переопределяем именно на .g-root — gravity-ui задаёт типографию там, а не на :root. */
+/* Поднимаем body-1 до уровня body-2 (15/20) — чтобы заголовки Tool/Thinking
+   и кнопки size=m не были меньше основного текста. body-2 — дефолт gravity-ui. */
 .g-root {
   --g-text-body-1-font-size: 15px;
   --g-text-body-1-line-height: 20px;
-  --g-text-body-2-font-size: 17px;
-  --g-text-body-2-line-height: 24px;
 }
 
 html,
