@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { MessageList } from '@gravity-ui/aikit';
 import type {
   TAssistantMessage,
@@ -196,15 +196,41 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     await startStream(chatId, data.content);
   };
 
-  // Sticky-bottom при стриминге / новых сообщениях: если пользователь возле дна,
-  // следуем за контентом. Если он ушёл вверх читать — не дёргаем.
+  // Sticky-bottom: отслеживаем уход пользователя через сравнение scrollTop с тем,
+  // что мы сами поставили программно. Любое уменьшение scrollTop сверх ожидаемого
+  // = пользовательский жест вверх → отвязка. Привязка обратно — когда сам доскроллил до дна.
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+  const expectedScrollTopRef = useRef(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const cur = el.scrollTop;
+      const distanceFromBottom = el.scrollHeight - cur - el.clientHeight;
+      // ушли вверх относительно того, что мы программно ставили — отвязка
+      if (cur < expectedScrollTopRef.current - 2) {
+        stickRef.current = false;
+      }
+      // доскроллил до дна сам — привязка
+      if (distanceFromBottom < 8) {
+        stickRef.current = true;
+      }
+      expectedScrollTopRef.current = cur;
+    };
+
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (distanceFromBottom < 120) {
+    if (stickRef.current) {
       el.scrollTop = el.scrollHeight;
+      expectedScrollTopRef.current = el.scrollTop;
     }
   }, [partialContent, partialThinking, partialTool, messages.length]);
 
