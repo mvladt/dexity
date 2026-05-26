@@ -4,10 +4,8 @@
   padding: 0;
 }
 
-:root {
-  /* Поднимаем все базовые текстовые размеры aikit/uikit на одну ступень.
-     body-1 (capt./Button m / Text variant body-1): 13→15
-     body-2 (основной текст сообщений, инпут):     15→17 */
+/* Переопределяем именно на .g-root — gravity-ui задаёт типографию там, а не на :root. */
+.g-root {
   --g-text-body-1-font-size: 15px;
   --g-text-body-1-line-height: 20px;
   --g-text-body-2-font-size: 17px;
