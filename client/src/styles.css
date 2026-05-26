@@ -11,6 +11,38 @@
   --g-text-body-1-line-height: 20px;
 }
 
+/* Темизация подсветки кода — через публичный API @diplodoc/transform.
+   Палитра — Atom One (light + dark). */
+.g-root_theme_light {
+  --yfm-color-hljs-subst: #383a42;
+  --yfm-color-hljs-comment: #a0a1a7;
+  --yfm-color-hljs-deletion: #50a14f;
+  --yfm-color-hljs-section: #4078f2;
+  --yfm-color-hljs-addition: #e45649;
+  --yfm-color-hljs-literal: #986801;
+  --yfm-color-hljs-meta: #a626a4;
+  --yfm-color-hljs-meta-string: #50a14f;
+  --yfm-color-hljs-pseudo: #c18401;
+}
+
+.g-root_theme_dark {
+  --yfm-color-hljs-subst: #abb2bf;
+  --yfm-color-hljs-comment: #7f848e;
+  --yfm-color-hljs-deletion: #e06c75;
+  --yfm-color-hljs-section: #61afef;
+  --yfm-color-hljs-addition: #98c379;
+  --yfm-color-hljs-literal: #d19a66;
+  --yfm-color-hljs-meta: #56b6c2;
+  --yfm-color-hljs-meta-string: #98c379;
+  --yfm-color-hljs-pseudo: #c678dd;
+}
+
+/* По умолчанию diplodoc даёт .yfm code { font-size: 0.875em } — это правило бьёт
+   и по inline-коду, и по pre>code. В блочном коде размер 13px слишком мелкий — поднимаем. */
+.yfm pre code {
+  font-size: 14px;
+}
+
 html,
 body,
 #root {
