@@ -1,5 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import { MessageList } from '@gravity-ui/aikit';
+import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
   TAssistantMessage,
   TAssistantMessageContent,
@@ -196,47 +195,15 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     await startStream(chatId, data.content);
   };
 
-  // Sticky-bottom: отслеживаем уход пользователя через сравнение scrollTop с тем,
-  // что мы сами поставили программно. Любое уменьшение scrollTop сверх ожидаемого
-  // = пользовательский жест вверх → отвязка. Привязка обратно — когда сам доскроллил до дна.
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const stickRef = useRef(true);
-  const expectedScrollTopRef = useRef(0);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const onScroll = () => {
-      const cur = el.scrollTop;
-      const distanceFromBottom = el.scrollHeight - cur - el.clientHeight;
-      // ушли вверх относительно того, что мы программно ставили — отвязка
-      if (cur < expectedScrollTopRef.current - 2) {
-        stickRef.current = false;
-      }
-      // доскроллил до дна сам — привязка
-      if (distanceFromBottom < 8) {
-        stickRef.current = true;
-      }
-      expectedScrollTopRef.current = cur;
-    };
-
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    if (stickRef.current) {
-      el.scrollTop = el.scrollHeight;
-      expectedScrollTopRef.current = el.scrollTop;
-    }
-  }, [partialContent, partialThinking, partialTool, messages.length]);
+  const { containerRef } = useSmartScroll<HTMLDivElement>({
+    isStreaming: streaming,
+    messagesCount: messages.length,
+    status: streaming ? 'streaming' : 'ready',
+  });
 
   return (
     <div className="chat-content">
-      <div className="chat-messages" ref={scrollRef}>
+      <div className="chat-messages" ref={containerRef}>
         <MessageList
           messages={displayMessages}
           status={streaming ? 'streaming' : 'ready'}
