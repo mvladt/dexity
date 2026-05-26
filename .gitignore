@@ -1,3 +1,10 @@
 node_modules/
 .playwright-mcp/
+.playwright-cli/
 logs/
+
+# Claude Code — личные настройки конкретной машины
+.claude/settings.local.json
+
+# Артефакты playwright-cli из cwd
+current.yml
