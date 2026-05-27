@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
   TAssistantMessage,
@@ -186,10 +187,26 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       : []),
   ];
 
+  // Debounce лоадера: показываем 'submitted' только если стрим висит без
+  // контента дольше LOADER_DELAY_MS. Yandex часто отвечает за <500 мс, и
+  // без задержки лоадер мелькал бы на долю секунды.
+  const isWaitingFirstToken = streaming && streamingParts.length === 0;
+  const [showSubmittedLoader, setShowSubmittedLoader] = useState(false);
+  useEffect(() => {
+    if (!isWaitingFirstToken) {
+      setShowSubmittedLoader(false);
+      return;
+    }
+    const t = setTimeout(() => setShowSubmittedLoader(true), 300);
+    return () => clearTimeout(t);
+  }, [isWaitingFirstToken]);
+
   const chatStatus = streaming
     ? streamingParts.length > 0
       ? 'streaming'
-      : 'submitted'
+      : showSubmittedLoader
+        ? 'submitted'
+        : 'ready'
     : 'ready';
 
   const maxContext = getModel(model).maxContext;
