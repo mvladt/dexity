@@ -26,7 +26,7 @@ _Выкинута: «Регенерация последнего ответа».
 
 ## «Крутые фичи» — Dexity ближе к Perplexity
 
-- [ ] 15. **Web search + цитаты** — главная фишка Perplexity. Yandex Search API / SerpAPI → снипы в системный промпт → модель ставит `[1]`-маркеры → рендер через `InlineCitation` + блок «Sources». aikit готов: `ToolMessage`, `ToolStatus`, `InlineCitation`, `createMessageRendererRegistry()`. Самая сильная фича из списка.
+- [ ] 15. **Web search (агентский, через tool calling)** — модель сама решает, нужен ли поиск, и вызывает `web_search` как function call. Разведка подтвердила: все модели Yandex AI Studio поддерживают `tools` через OpenAI-совместимый Chat Completions API. Источники рендерим отдельным блоком `ToolMessage` над ответом. Подробный план: `docs/agentic-web-search-plan.md`.
 - [ ] 16. **Прикрепление файлов** — `AttachmentPicker` + `FileUploadDialog`. Бэк: парсить `.txt/.md/.pdf` (`pdf-parse`), инжектить в prompt. Yandex текстовая, но через файлы получится квази-multimodal.
 - [ ] 17. **Branching диалога (forks)** — кнопка «ответвить от этого сообщения». В БД у `chats` добавить `parent_chat_id` + `branch_from_message_id`. UI: ветки как отдельные чаты в сайдбаре.
 - [ ] 18. **Edit message + автоматический rerun** — отредактировал свой вопрос → удаляются все последующие сообщения → перегенерация. Стандарт ChatGPT.
