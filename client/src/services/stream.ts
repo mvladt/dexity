@@ -6,7 +6,7 @@ const BASE = import.meta.env.VITE_API_URL ?? '';
 interface StreamCallbacks {
   onThinkingDelta?: (delta: string) => void;
   onDelta: (delta: string) => void;
-  onTool?: (status: 'loading' | 'success' | 'error', sources?: Source[]) => void;
+  onTool?: (status: 'loading' | 'success' | 'error', sources: Source[] | undefined, callId: number) => void;
   onDone: (
     fullContent: string,
     assistantMessageId: number,
@@ -91,7 +91,7 @@ export async function streamMessages(
           } else if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
           } else if (event.type === 'tool') {
-            callbacks.onTool?.(event.tool.status, event.tool.sources);
+            callbacks.onTool?.(event.tool.status, event.tool.sources, event.tool.callId);
           } else if (event.type === 'done') {
             callbacks.onDone(
               event.fullContent,

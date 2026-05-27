@@ -146,17 +146,16 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const streaming = useStreamStore((s) => s.streaming);
   const partialContent = useStreamStore((s) => s.partialContent);
   const partialThinking = useStreamStore((s) => s.partialThinking);
-  const partialTool = useStreamStore((s) => s.partialTool);
+  const partialTools = useStreamStore((s) => s.partialTools);
   const startStream = useStreamStore((s) => s.startStream);
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
 
-  // Порядок партов во время стриминга: tool → thinking → text.
-  // (tool вызывается до LLM, thinking приходит до основного контента.)
+  // Порядок партов во время стриминга: tool0, tool1, …, thinking, text.
   const streamingParts: TAssistantMessageContent = [];
-  if (partialTool) {
-    streamingParts.push(buildToolPart(partialTool));
+  for (const tool of partialTools) {
+    if (tool) streamingParts.push(buildToolPart(tool));
   }
   if (partialThinking) {
     streamingParts.push({

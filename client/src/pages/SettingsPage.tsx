@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Text, TextArea } from '@gravity-ui/uikit';
+import { Switch, Text, TextArea } from '@gravity-ui/uikit';
 import { useSettingsStore } from '../stores/settingsStore';
 
 export function SettingsPage() {
   const systemPrompt = useSettingsStore((s) => s.systemPrompt);
   const setSystemPrompt = useSettingsStore((s) => s.setSystemPrompt);
+  const webSearch = useSettingsStore((s) => s.webSearch);
+  const setWebSearch = useSettingsStore((s) => s.setWebSearch);
 
   const [value, setValue] = useState(systemPrompt);
   const [saved, setSaved] = useState(false);
@@ -29,6 +31,16 @@ export function SettingsPage() {
   return (
     <div className="settings-page">
       <Text variant="header-1" as="h1">Настройки</Text>
+
+      <div className="settings-section">
+        <div className="settings-section-header">
+          <Text variant="subheader-2">Web Search (агентский)</Text>
+        </div>
+        <Text variant="body-1" color="secondary">
+          Разрешить модели вызывать веб-поиск, когда она решит, что это нужно.
+        </Text>
+        <Switch checked={webSearch} onUpdate={setWebSearch} size="m" />
+      </div>
 
       <div className="settings-section">
         <div className="settings-section-header">

@@ -13,7 +13,7 @@ interface StreamStore {
   streaming: boolean;
   partialContent: string;
   partialThinking: string;
-  partialTool: ToolState | null;
+  partialTools: ToolState[];
   error: { code: 'auth' | 'quota' | 'server'; message: string } | null;
   startStream: (chatId: number, content: string) => Promise<void>;
   cancel: () => void;
@@ -25,7 +25,7 @@ let abortController: AbortController | null = null;
 const INITIAL = {
   partialContent: '',
   partialThinking: '',
-  partialTool: null as ToolState | null,
+  partialTools: [] as ToolState[],
 };
 
 export const useStreamStore = create<StreamStore>()((set) => ({
@@ -59,14 +59,18 @@ export const useStreamStore = create<StreamStore>()((set) => ({
 
       onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
 
-      onTool: (status, sources) => {
-        if (status === 'success') {
-          set({ partialTool: { status: 'success', sources: sources ?? [] } });
-        } else if (status === 'error') {
-          set({ partialTool: { status: 'error' } });
-        } else {
-          set({ partialTool: { status: 'loading' } });
-        }
+      onTool: (status, sources, callId) => {
+        const entry: ToolState =
+          status === 'success'
+            ? { status: 'success', sources: sources ?? [] }
+            : status === 'error'
+              ? { status: 'error' }
+              : { status: 'loading' };
+        set((s) => {
+          const next = [...s.partialTools];
+          next[callId] = entry;
+          return { partialTools: next };
+        });
       },
 
       onDone: (fullContent, assistantMessageId, fullThinking, fullTool, chatTitle) => {

@@ -87,11 +87,11 @@ const tools = [{
 
 ### Frontend
 
-- [ ] 6. `client/src/stores/streamStore.ts` — `partialTool` → `partialTools` (массив по callId). Парсить SSE с учётом нового поля.
-- [ ] 7. `client/src/components/ChatStream.tsx` — рендерить несколько `ToolMessage` партов.
-- [ ] 8. `client/src/components/ChatComposer.tsx` — убрать `<Switch>` «Web» из footer'а.
-- [ ] 9. `client/src/stores/settingsStore.ts` — оставить `webSearchEnabled` как есть (имя не меняем), перенести UI в `/settings`.
-- [ ] 10. `shared/types.ts` (client side) — обновить тип `MessageToolData.sources` (если меняется структура — стоит подумать о хранении нескольких «раундов» источников, или склеивать в один список — склеивать проще).
+- [x] 6. `client/src/stores/streamStore.ts` — `partialTool` → `partialTools` (массив по callId). Парсить SSE с учётом нового поля.
+- [x] 7. `client/src/components/ChatStream.tsx` — рендерить несколько `ToolMessage` партов.
+- [x] 8. `client/src/components/ChatComposer.tsx` — убрать `<Switch>` «Web» из footer'а.
+- [x] 9. `client/src/stores/settingsStore.ts` — оставить `webSearchEnabled` как есть (имя не меняем), перенести UI в `/settings`.
+- [x] 10. `shared/types.ts` (client side) — обновить тип `MessageToolData.sources` (если меняется структура — стоит подумать о хранении нескольких «раундов» источников, или склеивать в один список — склеивать проще).
 
 ### Проверка
 

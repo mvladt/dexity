@@ -18,7 +18,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setModel: (model) => set({ model }),
       systemPrompt: '',
       setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
-      webSearch: false,
+      webSearch: true,
       setWebSearch: (webSearch) => set({ webSearch }),
     }),
     {

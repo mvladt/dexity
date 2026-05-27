@@ -1,7 +1,7 @@
 import { ContextIndicator, PromptInput } from '@gravity-ui/aikit';
 import type { TSubmitData } from '@gravity-ui/aikit';
 import type { ChatStatus } from '@gravity-ui/aikit';
-import { Select, Switch } from '@gravity-ui/uikit';
+import { Select } from '@gravity-ui/uikit';
 import { useSettingsStore } from '../stores/settingsStore';
 import { MODELS } from '../models';
 
@@ -17,8 +17,6 @@ interface Props {
 export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext, placeholder }: Props) {
   const model = useSettingsStore((s) => s.model);
   const setModel = useSettingsStore((s) => s.setModel);
-  const webSearch = useSettingsStore((s) => s.webSearch);
-  const setWebSearch = useSettingsStore((s) => s.setWebSearch);
 
   const showContextIndicator = usedTokens !== undefined && maxContext !== undefined;
 
@@ -31,14 +29,6 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
         options={MODELS.map((m) => ({ value: m.id, content: m.label }))}
         disabled={status === 'streaming'}
       />
-      <Switch
-        size="m"
-        checked={webSearch}
-        onUpdate={setWebSearch}
-        disabled={status === 'streaming'}
-      >
-        Web
-      </Switch>
     </div>
   );
 
