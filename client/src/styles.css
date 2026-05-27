@@ -188,6 +188,14 @@ body,
   padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
 }
 
+/* PromptInput по умолчанию ловит body-short (13px) от `.g-text-area_size_l .g-text-area__control`.
+   Двойной класс выравнивает специфичность (0,2,0) и поднимает текст до body-1 (15px),
+   чтобы инпут совпадал по размеру с сообщениями в ленте. */
+.g-aikit-prompt-input-body__textarea-control.g-text-area__control {
+  font-size: var(--g-text-body-1-font-size);
+  line-height: var(--g-text-body-1-line-height);
+}
+
 .chat-composer-footer {
   display: flex;
   align-items: center;
