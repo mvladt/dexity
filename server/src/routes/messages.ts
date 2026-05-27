@@ -9,7 +9,11 @@ import { streamChat } from '../services/llm.js';
 import { webSearch, webSearchTool } from '../services/search.js';
 import { config } from '../config.js';
 
-const MAX_TOOL_ROUNDS = 3;
+// Сколько раундов модели разрешено вызывать tools. Последний раунд — без
+// tools, чтобы выжать финальный текст. Эмпирически: DeepSeek-V3.2 любит
+// много искать (3-х было мало — на финальном round без tools она лезет
+// в content DSML-формат tool_call'а вместо обычного текста).
+const MAX_TOOL_ROUNDS = 10;
 
 const chatIdSchema = z.coerce.number().int().positive();
 const streamBodySchema = z.object({
