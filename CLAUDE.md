@@ -14,6 +14,7 @@
 dexity/
 ├── client/   # React + Vite (FSD-архитектура)
 ├── server/   # Fastify + SQLite (feature-modules)
+├── bdd/      # Gherkin-сценарии — поведенческие требования, раннера нет
 ├── nginx/
 └── deploy/
 ```
