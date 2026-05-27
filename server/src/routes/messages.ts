@@ -119,11 +119,14 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         if (abort.signal.aborted) return;
 
-        // На последней итерации форсим финальный ответ без новых tool-вызовов
-        const toolChoice = round === MAX_TOOL_ROUNDS - 1 ? 'none' : 'auto';
-        const tools = webSearchEnabled ? [webSearchTool] : undefined;
+        // На последнем раунде вообще не передаём tools — это надёжнее,
+        // чем tool_choice:'none'. Некоторые reasoning-модели (DeepSeek V3.2)
+        // в режиме 'none' эмулируют tool_call в обычном content через свой
+        // внутренний DSML-формат, который OpenAI-обёртка не парсит.
+        const isFinalRound = round === MAX_TOOL_ROUNDS - 1;
+        const tools = webSearchEnabled && !isFinalRound ? [webSearchTool] : undefined;
 
-        const stream = await streamChat(llmMessages, abort.signal, modelOverride, tools, toolChoice);
+        const stream = await streamChat(llmMessages, abort.signal, modelOverride, tools);
 
         // Аккумулятор tool_calls по index (куски arguments приходят по частям)
         type AccToolCall = {
