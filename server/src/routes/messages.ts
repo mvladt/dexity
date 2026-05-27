@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, asc, desc, sql } from 'drizzle-orm';
-import type { MessageToolData, Source } from '../../../shared/types.js';
+import type { MessageToolData, PartSnapshot, Source } from '../../../shared/types.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
@@ -105,6 +105,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let fullThinking = '';
     const allSources: Source[] = [];
     const callsSources: Source[][] = [];
+    const partsLog: PartSnapshot[] = [];
 
     // Сквозные счётчики через все раунды
     let sourcePosition = 1;
@@ -127,6 +128,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         const isFinalRound = round === MAX_TOOL_ROUNDS - 1;
         const tools = webSearchEnabled && !isFinalRound ? [webSearchTool] : undefined;
 
+        let roundThinking = '';
+
         const stream = await streamChat(llmMessages, abort.signal, modelOverride, tools);
 
         // Аккумулятор tool_calls по index (куски arguments приходят по частям)
@@ -144,6 +147,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
           if (reasoning) {
             fullThinking += reasoning;
+            roundThinking += reasoning;
             writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
           }
 
@@ -170,9 +174,15 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
         const toolCallsList = [...accToolCalls.values()];
         if (toolCallsList.length === 0) {
-          // Финальный ответ получен — выходим из цикла
+          // Финальный ответ получен. Если в этом раунде модель ещё «думала»
+          // перед текстом — сохраним этот thinking как последний парт.
+          if (roundThinking) partsLog.push({ type: 'thinking', content: roundThinking });
           break;
         }
+
+        // Перед группой tool_call'ов одного раунда — снапшот thinking'а
+        // этого раунда (если был), чтобы при reload видеть interleaving.
+        if (roundThinking) partsLog.push({ type: 'thinking', content: roundThinking });
 
         // Выполняем каждый tool_call и собираем tool-messages для следующего раунда
         const toolMessages: ChatCompletionMessageParam[] = [];
@@ -203,6 +213,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
             const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
             allSources.push(...sources);
             callsSources.push(sources);
+            partsLog.push({ type: 'tool', sources });
 
             writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
             toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(sources) });
@@ -228,7 +239,9 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       }
 
       const toolData: MessageToolData | null =
-        allSources.length > 0 ? { sources: allSources, calls: callsSources } : null;
+        allSources.length > 0
+          ? { sources: allSources, calls: callsSources, parts: partsLog }
+          : null;
 
       const [assistantMsg] = await db
         .insert(messages)

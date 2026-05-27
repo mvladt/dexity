@@ -112,20 +112,26 @@ function partsToAikitContent(parts: StreamPart[]): TAssistantMessageContent {
 }
 
 function toAikitMessage(msg: Message): TChatMessage {
+  const snapshot = msg.toolData?.parts;
   const hasTool = !!(msg.toolData?.calls?.length || msg.toolData?.sources?.length);
   if (msg.role === 'assistant' && (msg.thinking || hasTool)) {
     const parts: TAssistantMessageContent = [];
-    if (msg.thinking) {
-      parts.push(buildThinkingPart(msg.thinking, false));
-    }
-    // Новый формат: tool calls сгруппированы по вызовам — рендерим отдельный Web Search блок на каждый.
-    // Legacy: один плоский sources — один блок.
-    if (msg.toolData?.calls?.length) {
-      for (const sources of msg.toolData.calls) {
-        parts.push(buildToolPart({ status: 'success', sources }));
+    if (snapshot?.length) {
+      // Полная последовательность парт в порядке появления (thinking₁, tool₁, thinking₂, …).
+      for (const p of snapshot) {
+        if (p.type === 'thinking') parts.push(buildThinkingPart(p.content, false));
+        else parts.push(buildToolPart({ status: 'success', sources: p.sources }));
       }
-    } else if (msg.toolData?.sources?.length) {
-      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
+    } else {
+      // Legacy без снапшота: один склеенный thinking + либо calls (новый), либо плоский sources.
+      if (msg.thinking) parts.push(buildThinkingPart(msg.thinking, false));
+      if (msg.toolData?.calls?.length) {
+        for (const sources of msg.toolData.calls) {
+          parts.push(buildToolPart({ status: 'success', sources }));
+        }
+      } else if (msg.toolData?.sources?.length) {
+        parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
+      }
     }
     parts.push({ type: 'text', data: { text: msg.content } });
     return {
