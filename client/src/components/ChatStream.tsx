@@ -9,7 +9,7 @@ import type {
 import { Globe } from '@gravity-ui/icons';
 import { Icon } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
-import { useStreamStore, type ToolState } from '../stores/streamStore';
+import { useStreamStore, type StreamPart, type ToolState } from '../stores/streamStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { getModel } from '../models';
 import type { Message, Source } from '../types';
@@ -84,23 +84,47 @@ function buildToolPart(tool: ToolState) {
   };
 }
 
+function buildThinkingPart(content: string, isLast: boolean) {
+  return {
+    type: 'thinking' as const,
+    data: {
+      content,
+      status: isLast ? ('thinking' as const) : ('thought' as const),
+      defaultExpanded: true,
+      enabledCopy: true,
+    },
+  };
+}
+
+function partsToAikitContent(parts: StreamPart[]): TAssistantMessageContent {
+  const result: TAssistantMessageContent = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.type === 'thinking') {
+      result.push(buildThinkingPart(p.content, i === parts.length - 1));
+    } else if (p.type === 'tool') {
+      result.push(buildToolPart(p.state));
+    } else {
+      result.push({ type: 'text', data: { text: p.content } });
+    }
+  }
+  return result;
+}
+
 function toAikitMessage(msg: Message): TChatMessage {
-  // Assistant с сохранёнными thinking / sources — собираем массив партов.
-  // Порядок: thinking → tool → text (thinking предшествует tool_call'у).
-  if (msg.role === 'assistant' && (msg.thinking || msg.toolData?.sources?.length)) {
+  const hasTool = !!(msg.toolData?.calls?.length || msg.toolData?.sources?.length);
+  if (msg.role === 'assistant' && (msg.thinking || hasTool)) {
     const parts: TAssistantMessageContent = [];
     if (msg.thinking) {
-      parts.push({
-        type: 'thinking',
-        data: {
-          content: msg.thinking,
-          status: 'thought',
-          defaultExpanded: false,
-          enabledCopy: true,
-        },
-      });
+      parts.push(buildThinkingPart(msg.thinking, false));
     }
-    if (msg.toolData?.sources?.length) {
+    // Новый формат: tool calls сгруппированы по вызовам — рендерим отдельный Web Search блок на каждый.
+    // Legacy: один плоский sources — один блок.
+    if (msg.toolData?.calls?.length) {
+      for (const sources of msg.toolData.calls) {
+        parts.push(buildToolPart({ status: 'success', sources }));
+      }
+    } else if (msg.toolData?.sources?.length) {
       parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
     }
     parts.push({ type: 'text', data: { text: msg.content } });
@@ -144,40 +168,22 @@ interface Props {
 export function ChatStream({ chatId, onUserMessage }: Props) {
   const messages = useChatStore((s) => s.messages);
   const streaming = useStreamStore((s) => s.streaming);
-  const partialContent = useStreamStore((s) => s.partialContent);
-  const partialThinking = useStreamStore((s) => s.partialThinking);
-  const partialTools = useStreamStore((s) => s.partialTools);
+  const parts = useStreamStore((s) => s.parts);
   const startStream = useStreamStore((s) => s.startStream);
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
 
-  // Порядок партов во время стриминга: thinking → tool0, tool1, … → text.
-  // Thinking семантически предшествует tool_call'у (модель сначала решает,
-  // что нужен поиск, потом зовёт его).
-  const streamingParts: TAssistantMessageContent = [];
-  if (partialThinking) {
-    streamingParts.push({
-      type: 'thinking',
-      data: {
-        content: partialThinking,
-        status: partialContent ? 'thought' : 'thinking',
-        defaultExpanded: true,
-      },
-    });
-  }
-  for (const tool of partialTools) {
-    if (tool) streamingParts.push(buildToolPart(tool));
-  }
-  if (partialContent) {
-    streamingParts.push({ type: 'text', data: { text: partialContent } });
-  }
+  // Парты собираются в порядке поступления: thinking, потом tool, потом
+  // снова thinking (если модель «думает» над результатом поиска), и так
+  // далее, заканчивается text-партом с финальным ответом.
+  const streamingParts = partsToAikitContent(parts);
 
   // Пока стрим запущен, но ни одного парта ещё нет — не показываем пустой
   // assistant-пузырь. Вместо него aikit нарисует Loader (status='submitted').
   const displayMessages: TChatMessage[] = [
     ...messages.map(toAikitMessage),
-    ...(streaming && streamingParts.length > 0
+    ...(streaming && parts.length > 0
       ? [
           {
             role: 'assistant' as const,
@@ -191,7 +197,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   // Debounce лоадера: показываем 'submitted' только если стрим висит без
   // контента дольше LOADER_DELAY_MS. Yandex часто отвечает за <500 мс, и
   // без задержки лоадер мелькал бы на долю секунды.
-  const isWaitingFirstToken = streaming && streamingParts.length === 0;
+  const isWaitingFirstToken = streaming && parts.length === 0;
   const [showSubmittedLoader, setShowSubmittedLoader] = useState(false);
   useEffect(() => {
     if (!isWaitingFirstToken) {
@@ -203,7 +209,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   }, [isWaitingFirstToken]);
 
   const chatStatus = streaming
-    ? streamingParts.length > 0
+    ? parts.length > 0
       ? 'streaming'
       : showSubmittedLoader
         ? 'submitted'

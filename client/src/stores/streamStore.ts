@@ -9,11 +9,14 @@ export type ToolState =
   | { status: 'success'; sources: Source[] }
   | { status: 'error' };
 
+export type StreamPart =
+  | { type: 'thinking'; content: string }
+  | { type: 'tool'; callId: number; state: ToolState }
+  | { type: 'text'; content: string };
+
 interface StreamStore {
   streaming: boolean;
-  partialContent: string;
-  partialThinking: string;
-  partialTools: ToolState[];
+  parts: StreamPart[];
   error: { code: 'auth' | 'quota' | 'server'; message: string } | null;
   startStream: (chatId: number, content: string) => Promise<void>;
   cancel: () => void;
@@ -22,11 +25,7 @@ interface StreamStore {
 
 let abortController: AbortController | null = null;
 
-const INITIAL = {
-  partialContent: '',
-  partialThinking: '',
-  partialTools: [] as ToolState[],
-};
+const INITIAL = { parts: [] as StreamPart[] };
 
 export const useStreamStore = create<StreamStore>()((set) => ({
   streaming: false,
@@ -55,21 +54,45 @@ export const useStreamStore = create<StreamStore>()((set) => ({
       webSearch,
 
       onThinkingDelta: (delta) =>
-        set((s) => ({ partialThinking: s.partialThinking + delta })),
+        set((s) => {
+          const parts = [...s.parts];
+          const last = parts[parts.length - 1];
+          if (last?.type === 'thinking') {
+            parts[parts.length - 1] = { type: 'thinking', content: last.content + delta };
+          } else {
+            parts.push({ type: 'thinking', content: delta });
+          }
+          return { parts };
+        }),
 
-      onDelta: (delta) => set((s) => ({ partialContent: s.partialContent + delta })),
+      onDelta: (delta) =>
+        set((s) => {
+          const parts = [...s.parts];
+          const last = parts[parts.length - 1];
+          if (last?.type === 'text') {
+            parts[parts.length - 1] = { type: 'text', content: last.content + delta };
+          } else {
+            parts.push({ type: 'text', content: delta });
+          }
+          return { parts };
+        }),
 
       onTool: (status, sources, callId) => {
-        const entry: ToolState =
+        const state: ToolState =
           status === 'success'
             ? { status: 'success', sources: sources ?? [] }
             : status === 'error'
               ? { status: 'error' }
               : { status: 'loading' };
         set((s) => {
-          const next = [...s.partialTools];
-          next[callId] = entry;
-          return { partialTools: next };
+          const parts = [...s.parts];
+          const idx = parts.findIndex((p) => p.type === 'tool' && p.callId === callId);
+          if (idx >= 0) {
+            parts[idx] = { type: 'tool', callId, state };
+          } else {
+            parts.push({ type: 'tool', callId, state });
+          }
+          return { parts };
         });
       },
 

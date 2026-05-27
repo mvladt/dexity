@@ -104,6 +104,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let fullContent = '';
     let fullThinking = '';
     const allSources: Source[] = [];
+    const callsSources: Source[][] = [];
 
     // Сквозные счётчики через все раунды
     let sourcePosition = 1;
@@ -201,6 +202,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
             const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
             allSources.push(...sources);
+            callsSources.push(sources);
 
             writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
             toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(sources) });
@@ -225,7 +227,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         llmMessages.push(...toolMessages);
       }
 
-      const toolData: MessageToolData | null = allSources.length > 0 ? { sources: allSources } : null;
+      const toolData: MessageToolData | null =
+        allSources.length > 0 ? { sources: allSources, calls: callsSources } : null;
 
       const [assistantMsg] = await db
         .insert(messages)

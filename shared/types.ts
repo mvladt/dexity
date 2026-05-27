@@ -15,6 +15,9 @@ export interface Source {
 
 export interface MessageToolData {
   sources?: Source[];
+  // Источники, сгруппированные по tool_call: один массив на каждый вызов web_search.
+  // Нужен, чтобы после reload рендерить раздельные Web Search блоки, как при стриме.
+  calls?: Source[][];
 }
 
 export interface Message {
