@@ -171,18 +171,26 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     streamingParts.push({ type: 'text', data: { text: partialContent } });
   }
 
+  // Пока стрим запущен, но ни одного парта ещё нет — не показываем пустой
+  // assistant-пузырь. Вместо него aikit нарисует Loader (status='submitted').
   const displayMessages: TChatMessage[] = [
     ...messages.map(toAikitMessage),
-    ...(streaming
+    ...(streaming && streamingParts.length > 0
       ? [
           {
             role: 'assistant' as const,
-            content: streamingParts.length > 0 ? streamingParts : '',
+            content: streamingParts,
             id: '__streaming__',
           },
         ]
       : []),
   ];
+
+  const chatStatus = streaming
+    ? streamingParts.length > 0
+      ? 'streaming'
+      : 'submitted'
+    : 'ready';
 
   const maxContext = getModel(model).maxContext;
   const usedTokens = messages
@@ -198,7 +206,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const { containerRef } = useSmartScroll<HTMLDivElement>({
     isStreaming: streaming,
     messagesCount: messages.length,
-    status: streaming ? 'streaming' : 'ready',
+    status: chatStatus,
   });
 
   return (
@@ -206,7 +214,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       <div className="chat-messages" ref={containerRef}>
         <MessageList
           messages={displayMessages}
-          status={streaming ? 'streaming' : 'ready'}
+          status={chatStatus}
           shouldParseIncompleteMarkdown={streaming}
           showTimestamp
           showActionsOnHover
