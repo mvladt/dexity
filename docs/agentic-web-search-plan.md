@@ -73,24 +73,24 @@ const tools = [{
 `ChatComposer.tsx`:
 - **Убрать** тогл «Web» из footer'а.
 - Поведение «вкл/выкл» теперь определяется системно: `tools` всегда передаётся (модель решает).
-- В `settingsStore` — оставить опциональный флаг `webSearchEnabled` (по умолчанию `true`), переименовать в `agenticToolsEnabled`. Если `false` — backend не передаёт `tools` в запросе. UI для этого флага — на странице `/settings`, не в composer'е.
+- В `settingsStore` — оставить существующий флаг `webSearchEnabled` (по умолчанию `true`). Имя не меняем: это per-tool флаг, при будущем добавлении других tools у каждого свой `xxxEnabled`. Если `false` — backend не передаёт `tools` в запросе. UI для этого флага — на странице `/settings`, не в composer'е.
 
 ## Шаги реализации
 
 ### Backend
 
-- [ ] 1. `server/src/services/llm.ts` — добавить параметр `tools` в `streamChat`, пробросить в SDK.
-- [ ] 2. `server/src/routes/messages.ts` — обернуть стрим в round-loop, аккумулировать tool_calls, исполнять `webSearch`, пушить промежуточные SSE-события.
-- [ ] 3. `shared/types.ts` — расширить SSE-протокол: `tool` событие получает `callId: number`.
-- [ ] 4. Tools schema — описать `web_search` функцию рядом с `webSearch()` сервисом (один файл — `server/src/services/search.ts`).
-- [ ] 5. Удалить `buildSearchPromptBlock` и старую ветку «синхронный поиск по тогглу» из routes/messages.ts.
+- [x] 1. `server/src/services/llm.ts` — добавить параметр `tools` в `streamChat`, пробросить в SDK.
+- [x] 2. `server/src/routes/messages.ts` — обернуть стрим в round-loop, аккумулировать tool_calls, исполнять `webSearch`, пушить промежуточные SSE-события.
+- [x] 3. `shared/types.ts` — расширить SSE-протокол: `tool` событие получает `callId: number`.
+- [x] 4. Tools schema — описать `web_search` функцию рядом с `webSearch()` сервисом (один файл — `server/src/services/search.ts`).
+- [x] 5. Удалить `buildSearchPromptBlock` и старую ветку «синхронный поиск по тогглу» из routes/messages.ts.
 
 ### Frontend
 
 - [ ] 6. `client/src/stores/streamStore.ts` — `partialTool` → `partialTools` (массив по callId). Парсить SSE с учётом нового поля.
 - [ ] 7. `client/src/components/ChatStream.tsx` — рендерить несколько `ToolMessage` партов.
 - [ ] 8. `client/src/components/ChatComposer.tsx` — убрать `<Switch>` «Web» из footer'а.
-- [ ] 9. `client/src/stores/settingsStore.ts` — переименовать `webSearchEnabled` → `agenticToolsEnabled`, перенести UI в `/settings`.
+- [ ] 9. `client/src/stores/settingsStore.ts` — оставить `webSearchEnabled` как есть (имя не меняем), перенести UI в `/settings`.
 - [ ] 10. `shared/types.ts` (client side) — обновить тип `MessageToolData.sources` (если меняется структура — стоит подумать о хранении нескольких «раундов» источников, или склеивать в один список — склеивать проще).
 
 ### Проверка
@@ -98,7 +98,7 @@ const tools = [{
 - [ ] 11. Прогон вживую: «Что нового в новостях?» → модель должна вызвать `web_search` сама.
 - [ ] 12. Прогон: «Сколько будет 2+2?» → модель НЕ должна вызывать `web_search` (auto-режим).
 - [ ] 13. Прогон с длинной историей: модель решает искать в середине диалога.
-- [ ] 14. Прогон с `agenticToolsEnabled: false` → tools не передаются, поведение как до фичи.
+- [ ] 14. Прогон с `webSearchEnabled: false` → tools не передаются, модель отвечает без поиска.
 - [ ] 15. Прогон c cancel'ом во время tool execution → `abort.signal` корректно отменяет и LLM, и Yandex Search.
 
 ## Открытые вопросы / риски

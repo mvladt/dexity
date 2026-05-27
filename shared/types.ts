@@ -35,6 +35,7 @@ export type SSEEvent =
       tool: {
         name: 'web';
         status: 'loading' | 'success' | 'error';
+        callId: number;
         sources?: Source[];
       };
     }

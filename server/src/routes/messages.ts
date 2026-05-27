@@ -2,11 +2,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, asc, desc, sql } from 'drizzle-orm';
 import type { MessageToolData, Source } from '../../../shared/types.js';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
 import { streamChat } from '../services/llm.js';
-import { webSearch } from '../services/search.js';
+import { webSearch, webSearchTool } from '../services/search.js';
 import { config } from '../config.js';
+
+const MAX_TOOL_ROUNDS = 3;
 
 const chatIdSchema = z.coerce.number().int().positive();
 const streamBodySchema = z.object({
@@ -15,17 +18,6 @@ const streamBodySchema = z.object({
   systemPrompt: z.string().max(4000).optional(),
   webSearch: z.boolean().optional(),
 });
-
-function buildSearchPromptBlock(sources: Source[]): string {
-  const lines = sources.map(
-    (s) => `[${s.position}] ${s.title} (${s.url})\n${s.snippet}`,
-  );
-  return [
-    'Актуальная информация из веб-поиска (используй её при ответе):',
-    '',
-    ...lines,
-  ].join('\n');
-}
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -74,7 +66,6 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
 
-    // Load last 20 messages before inserting user message
     let history = await db
       .select()
       .from(messages)
@@ -83,20 +74,17 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       .limit(20);
     history = history.reverse();
 
-    // Drop orphaned assistant message at start of window
     if (history.length > 0 && history[0].role === 'assistant') {
       history = history.slice(1);
     }
 
     const userMessagesBefore = history.filter((m) => m.role === 'user').length;
 
-    // Insert user message
     const [userMsg] = await db
       .insert(messages)
       .values({ chatId, role: 'user', content: userContent })
       .returning();
 
-    // Open SSE
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -104,76 +92,138 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       'X-Accel-Buffering': 'no',
       'Access-Control-Allow-Origin': config.CORS_ORIGIN ?? '*',
     });
-    // Fastify won't touch reply anymore — any thrown error must not reach its error handler
-    // (it would try to writeHead a 500 over an already-streaming SSE response).
     reply.hijack();
 
-    // Keep-alive ping every 15s
     const pingInterval = setInterval(() => {
       reply.raw.write(': ping\n\n');
     }, 15_000);
 
-    // Abort upstream when client disconnects (stop paying Yandex tokens on cancel)
     const abort = new AbortController();
     request.raw.on('close', () => abort.abort());
 
     let fullContent = '';
     let fullThinking = '';
-    let toolData: MessageToolData | null = null;
-    let searchPromptBlock: string | null = null;
+    const allSources: Source[] = [];
+
+    // Сквозные счётчики через все раунды
+    let sourcePosition = 1;
+    let callIdSeq = 0;
 
     try {
-      // Web Search — синхронно перед LLM, шлём loading → success/error
-      if (webSearchEnabled) {
-        writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading' } });
-        try {
-          const sources = await webSearch(userContent, abort.signal);
-          writeSSE(reply, {
-            type: 'tool',
-            tool: { name: 'web', status: 'success', sources },
-          });
-          if (sources.length > 0) {
-            toolData = { sources };
-            searchPromptBlock = buildSearchPromptBlock(sources);
-          } else {
-            searchPromptBlock = 'Веб-поиск не дал результатов. Отвечай по своим знаниям.';
-          }
-        } catch (err) {
-          if (abort.signal.aborted) return;
-          request.log.warn({ err }, 'Web search failed');
-          writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error' } });
-          searchPromptBlock = 'Веб-поиск не сработал. Отвечай по своим знаниям.';
-        }
-      }
-
-      // Build LLM context (user systemPrompt + search prompt block если есть)
-      const systemContent = [systemPrompt, searchPromptBlock]
-        .filter(Boolean)
-        .join('\n\n');
-      const llmMessages = [
-        ...(systemContent ? [{ role: 'system' as const, content: systemContent }] : []),
+      const llmMessages: ChatCompletionMessageParam[] = [
+        ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
         { role: 'user' as const, content: userContent },
       ];
 
-      const stream = await streamChat(llmMessages, abort.signal, modelOverride);
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+        if (abort.signal.aborted) return;
 
-      for await (const chunk of stream) {
-        const delta = chunk.choices[0]?.delta ?? {};
-        // OpenAI SDK не описывает reasoning_content — нестандартное поле от reasoning-моделей
-        // (Qwen3, DeepSeek V3.2, GPT-OSS). YandexGPT его не присылает — блок просто не появится.
-        const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
-        if (reasoning) {
-          fullThinking += reasoning;
-          writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+        // На последней итерации форсим финальный ответ без новых tool-вызовов
+        const toolChoice = round === MAX_TOOL_ROUNDS - 1 ? 'none' : 'auto';
+        const tools = webSearchEnabled ? [webSearchTool] : undefined;
+
+        const stream = await streamChat(llmMessages, abort.signal, modelOverride, tools, toolChoice);
+
+        // Аккумулятор tool_calls по index (куски arguments приходят по частям)
+        type AccToolCall = {
+          index: number;
+          id: string;
+          name: string;
+          arguments: string;
+        };
+        const accToolCalls: Map<number, AccToolCall> = new Map();
+
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta ?? {};
+
+          const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
+          if (reasoning) {
+            fullThinking += reasoning;
+            writeSSE(reply, { type: 'thinking_delta', delta: reasoning });
+          }
+
+          if (delta.content) {
+            fullContent += delta.content;
+            writeSSE(reply, { type: 'delta', delta: delta.content });
+          }
+
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!accToolCalls.has(idx)) {
+                accToolCalls.set(idx, { index: idx, id: tc.id ?? '', name: tc.function?.name ?? '', arguments: '' });
+              }
+              const acc = accToolCalls.get(idx)!;
+              if (tc.id) acc.id = tc.id;
+              if (tc.function?.name) acc.name = tc.function.name;
+              if (tc.function?.arguments) acc.arguments += tc.function.arguments;
+            }
+          }
         }
-        if (delta.content) {
-          fullContent += delta.content;
-          writeSSE(reply, { type: 'delta', delta: delta.content });
+
+        if (abort.signal.aborted) return;
+
+        const toolCallsList = [...accToolCalls.values()];
+        if (toolCallsList.length === 0) {
+          // Финальный ответ получен — выходим из цикла
+          break;
         }
+
+        // Выполняем каждый tool_call и собираем tool-messages для следующего раунда
+        const toolMessages: ChatCompletionMessageParam[] = [];
+
+        for (const tc of toolCallsList) {
+          const callId = callIdSeq++;
+
+          let parsedArgs: { query?: string } = {};
+          try {
+            parsedArgs = JSON.parse(tc.arguments);
+          } catch {
+            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'invalid arguments' }) });
+            continue;
+          }
+
+          if (tc.name !== 'web_search') {
+            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'unknown tool' }) });
+            continue;
+          }
+
+          const query = parsedArgs.query ?? '';
+          writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading', callId } });
+
+          try {
+            const rawSources = await webSearch(query, abort.signal);
+            if (abort.signal.aborted) return;
+
+            const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
+            allSources.push(...sources);
+
+            writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
+            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(sources) });
+          } catch (err) {
+            if (abort.signal.aborted) return;
+            request.log.warn({ err }, 'Web search failed');
+            writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error', callId } });
+            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'search failed' }) });
+          }
+        }
+
+        // Добавляем assistant-сообщение с tool_calls и ответы tool'ов в историю
+        llmMessages.push({
+          role: 'assistant',
+          content: '',
+          tool_calls: toolCallsList.map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: { name: tc.name, arguments: tc.arguments },
+          })),
+        });
+        llmMessages.push(...toolMessages);
       }
 
-      // Save assistant message
+      const toolData: MessageToolData | null = allSources.length > 0 ? { sources: allSources } : null;
+
       const [assistantMsg] = await db
         .insert(messages)
         .values({
@@ -185,13 +235,11 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         })
         .returning();
 
-      // Update chat updated_at
       await db
         .update(chats)
         .set({ updatedAt: sql`(datetime('now'))` })
         .where(eq(chats.id, chatId));
 
-      // Auto-title on first user message
       let chatTitle: string | undefined;
       if (userMessagesBefore === 0) {
         chatTitle = buildTitle(userContent);
@@ -211,7 +259,6 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       });
     } catch (err: unknown) {
       if (abort.signal.aborted) {
-        // Client cancelled — socket already closed, just bail
         return;
       }
 

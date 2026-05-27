@@ -1,7 +1,22 @@
 import { XMLParser } from 'fast-xml-parser';
+import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import type { Source } from '../../../shared/types.js';
 
 export type { Source };
+
+export const webSearchTool: ChatCompletionTool = {
+  type: 'function',
+  function: {
+    name: 'web_search',
+    description:
+      'Ищет актуальную информацию в интернете. Используй для свежих событий, цен, новостей, фактов после твоей даты обучения.',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Поисковый запрос на русском' } },
+      required: ['query'],
+    },
+  },
+};
 
 const ENDPOINT = 'https://searchapi.api.cloud.yandex.net/v2/web/search';
 const QUERY_MAX_LEN = 400;
