@@ -17,7 +17,7 @@ _Выкинута: «Регенерация последнего ответа».
 
 ## Средние улучшения
 
-- [ ] 7. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone. _Отложено: `view="full"` без footer-элементов смотрится коряво (одинокий ContextIndicator + изолированная submit-кнопка). Имеет смысл, когда подвезём #16 (attachments) или вернёмся к идее settings-меню. ContextIndicator используем отдельно, без `view="full"`._
+- [x] 7. **`PromptInput view="full"`** вместо `simple` — открывает header/footer: `ContextIndicator`, settings, attachment, microphone. _Сделано: `view="full"` подключён в `ChatComposer.tsx`. `headerProps.topContent` — `ContextIndicator`, `footerProps.bottomContent` — селект модели + переключатель Web. Изначально планировали отложить до #16, но фактически footer наполнился содержимым раньше — за счёт #11 (выбор модели) и #15 (Web-тогл)._
 - [x] 8. **`ContextIndicator` (% контекста)** — бэк льёт всю историю в `messages[]` каждый раз (CLAUDE.md). Рано или поздно упрётся в лимит токенов. Показывать процент окна. _Сделано: оценка `chars / 3` (BPE YandexGPT по кириллице), окно `last 20` (как на бэке). MAX_CONTEXT — динамический, зависит от выбранной модели (#11). Размещён в отдельном ряду под инпутом, рядом с Disclaimer._
 - [ ] 9. **`FeedbackForm` + `RatingBlock`** — thumbs up/down + причина + комментарий. Логировать в SQLite в отдельную таблицу.
 - [ ] 10. **`ThinkingMessage`** — collapsible «думаю…» до первого токена стрима (TTFB Yandex 2-3 сек, UI кажется висящим).
