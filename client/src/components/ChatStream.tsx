@@ -86,12 +86,9 @@ function buildToolPart(tool: ToolState) {
 
 function toAikitMessage(msg: Message): TChatMessage {
   // Assistant с сохранёнными thinking / sources — собираем массив партов.
-  // Порядок такой же, как в streamingParts ниже: tool → thinking → text.
+  // Порядок: thinking → tool → text (thinking предшествует tool_call'у).
   if (msg.role === 'assistant' && (msg.thinking || msg.toolData?.sources?.length)) {
     const parts: TAssistantMessageContent = [];
-    if (msg.toolData?.sources?.length) {
-      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
-    }
     if (msg.thinking) {
       parts.push({
         type: 'thinking',
@@ -102,6 +99,9 @@ function toAikitMessage(msg: Message): TChatMessage {
           enabledCopy: true,
         },
       });
+    }
+    if (msg.toolData?.sources?.length) {
+      parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
     }
     parts.push({ type: 'text', data: { text: msg.content } });
     return {
@@ -152,11 +152,10 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
 
-  // Порядок партов во время стриминга: tool0, tool1, …, thinking, text.
+  // Порядок партов во время стриминга: thinking → tool0, tool1, … → text.
+  // Thinking семантически предшествует tool_call'у (модель сначала решает,
+  // что нужен поиск, потом зовёт его).
   const streamingParts: TAssistantMessageContent = [];
-  for (const tool of partialTools) {
-    if (tool) streamingParts.push(buildToolPart(tool));
-  }
   if (partialThinking) {
     streamingParts.push({
       type: 'thinking',
@@ -166,6 +165,9 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
         defaultExpanded: true,
       },
     });
+  }
+  for (const tool of partialTools) {
+    if (tool) streamingParts.push(buildToolPart(tool));
   }
   if (partialContent) {
     streamingParts.push({ type: 'text', data: { text: partialContent } });
