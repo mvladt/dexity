@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Button, Text } from '@gravity-ui/uikit';
 import { Plus, ClockArrowRotateLeft, Gear, Bars } from '@gravity-ui/icons';
-import { ThemeSwitcher } from './ThemeSwitcher';
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -33,9 +32,6 @@ export function AppLayout() {
           </li>
         ))}
       </ul>
-      <div className="app-nav-footer">
-        <ThemeSwitcher />
-      </div>
     </nav>
   );
 

@@ -1,7 +1,25 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@gravity-ui/uikit';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
+
+function useResolvedTheme(): 'light' | 'dark' {
+  const theme = useThemeStore((s) => s.theme);
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia('(prefers-color-scheme: dark)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  if (theme === 'system') return systemDark ? 'dark' : 'light';
+  return theme;
+}
 import { LoginPage } from './pages/LoginPage';
 import { ChatPage } from './pages/ChatPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -21,8 +39,7 @@ function GuestGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const theme = useThemeStore((s) => s.theme);
-  const resolvedTheme = theme === 'system' ? 'light' : theme;
+  const resolvedTheme = useResolvedTheme();
 
   return (
     <ThemeProvider theme={resolvedTheme}>

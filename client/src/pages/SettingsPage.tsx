@@ -1,65 +1,334 @@
-import { useEffect, useRef, useState } from 'react';
-import { Switch, Text, TextArea } from '@gravity-ui/uikit';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Button,
+  Label,
+  SegmentedRadioGroup,
+  Select,
+  Switch,
+  Text,
+  TextArea,
+} from '@gravity-ui/uikit';
+import {
+  Check,
+  Display,
+  Key,
+  Layers,
+  Moon,
+  Sparkles,
+  Sun,
+  TrashBin,
+} from '@gravity-ui/icons';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useThemeStore } from '../stores/themeStore';
+import { MODELS } from '../models';
+
+const SYSTEM_PROMPT_MAX = 4000;
+
+const MODEL_ICONS: Record<string, React.ReactNode> = {
+  'yandexgpt-lite': <Sparkles />,
+  yandexgpt: <Sparkles />,
+  'yandexgpt-32k': <Sparkles />,
+};
 
 export function SettingsPage() {
+  const model = useSettingsStore((s) => s.model);
+  const setModel = useSettingsStore((s) => s.setModel);
   const systemPrompt = useSettingsStore((s) => s.systemPrompt);
   const setSystemPrompt = useSettingsStore((s) => s.setSystemPrompt);
   const webSearch = useSettingsStore((s) => s.webSearch);
   const setWebSearch = useSettingsStore((s) => s.setWebSearch);
 
-  const [value, setValue] = useState(systemPrompt);
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+
+  // Stub-only тогглы — пока без сохранения, см. docs/settings-redesign-task.md
+  const [streaming, setStreaming] = useState(true);
+  const [showCitations, setShowCitations] = useState(true);
+
+  // «Сохранено» badge в шапке — гасится через 1.5 с после любого изменения.
   const [saved, setSaved] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markSaved = useCallback(() => {
+    setSaved(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
+  }, []);
 
+  // Системный промпт — debounce 500 мс перед сохранением в store.
+  const [draftPrompt, setDraftPrompt] = useState(systemPrompt);
+  const promptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    setValue(systemPrompt);
+    setDraftPrompt(systemPrompt);
   }, [systemPrompt]);
-
-  const handleChange = (v: string) => {
-    setValue(v);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
+  const handlePromptChange = (v: string) => {
+    setDraftPrompt(v);
+    if (promptTimerRef.current) clearTimeout(promptTimerRef.current);
+    promptTimerRef.current = setTimeout(() => {
       setSystemPrompt(v);
-      setSaved(true);
-      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
-      savedTimerRef.current = setTimeout(() => setSaved(false), 1500);
+      markSaved();
     }, 500);
+  };
+
+  const handleModelChange = (vals: string[]) => {
+    setModel(vals[0]);
+    markSaved();
+  };
+
+  const handleWebSearch = (v: boolean) => {
+    setWebSearch(v);
+    markSaved();
+  };
+
+  const handleTheme = (value: string) => {
+    setTheme(value as 'light' | 'dark' | 'system');
+    markSaved();
+  };
+
+  const handleStubToggle = (setter: (v: boolean) => void) => (v: boolean) => {
+    setter(v);
+    markSaved();
+  };
+
+  const handleDeleteAll = () => {
+    // eslint-disable-next-line no-alert
+    const ok = window.confirm(
+      'Удалить все чаты, сообщения и источники? Действие необратимо.',
+    );
+    if (!ok) return;
+    // Заглушка — бэк-эндпоинта нет. См. TODO.md.
   };
 
   return (
     <div className="settings-page">
-      <Text variant="header-1" as="h1">Настройки</Text>
-
-      <div className="settings-section">
-        <div className="settings-section-header">
-          <Text variant="subheader-2">Web Search (агентский)</Text>
-        </div>
-        <Text variant="body-1" color="secondary">
-          Разрешить модели вызывать веб-поиск, когда она решит, что это нужно.
+      <header className="settings-header">
+        <Text variant="header-1" as="h1">
+          Настройки
         </Text>
-        <Switch checked={webSearch} onUpdate={setWebSearch} size="m" />
-      </div>
+        {saved && (
+          <Label theme="success" size="m" icon={<Check />}>
+            Сохранено
+          </Label>
+        )}
+      </header>
 
-      <div className="settings-section">
-        <div className="settings-section-header">
-          <Text variant="subheader-2">Системный промпт</Text>
-          {saved && (
-            <Text variant="body-1" color="positive" className="settings-saved">
-              Сохранено
+      <div className="settings-inner">
+        {/* ── Модель ─────────────────────────────────────────── */}
+        <section className="settings-section">
+          <div className="settings-section__head">
+            <Text variant="subheader-2" as="h2">
+              Модель
             </Text>
-          )}
-        </div>
-        <Text variant="body-1" color="secondary">
-          Применяется ко всем чатам, включая существующие.
-        </Text>
-        <TextArea
-          value={value}
-          onUpdate={handleChange}
-          rows={8}
-          placeholder="Например: ты опытный senior-разработчик, отвечай кратко…"
-        />
+            <Text variant="body-1" color="secondary">
+              По умолчанию для новых чатов. Можно переопределить в композере конкретного чата.
+            </Text>
+          </div>
+
+          <div className="settings-field">
+            <Text variant="body-1" color="secondary" className="settings-field__label">
+              Модель по умолчанию
+            </Text>
+            <Select
+              size="m"
+              value={[model]}
+              onUpdate={handleModelChange}
+              width="max"
+            >
+              {MODELS.map((m) => (
+                <Select.Option key={m.id} value={m.id} content={m.label}>
+                  <div className="settings-model-option">
+                    <span className="settings-model-option__icon">
+                      {MODEL_ICONS[m.id] ?? <Layers />}
+                    </span>
+                    <span>{m.label}</span>
+                    <span className="settings-model-option__ctx">
+                      · {Math.round(m.maxContext / 1000)}k
+                    </span>
+                  </div>
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="settings-field">
+            <Text variant="body-1" color="secondary" className="settings-field__label">
+              Системный промпт <span className="settings-field__sub">· применяется ко всем чатам</span>
+            </Text>
+            <TextArea
+              value={draftPrompt}
+              onUpdate={handlePromptChange}
+              rows={5}
+              maxRows={12}
+              placeholder="Например: ты опытный senior-разработчик, отвечай кратко…"
+            />
+            <Text variant="caption-2" color="hint">
+              Сохраняется автоматически · {draftPrompt.length} / {SYSTEM_PROMPT_MAX} символов
+            </Text>
+          </div>
+        </section>
+
+        {/* ── Интерфейс ──────────────────────────────────────── */}
+        <section className="settings-section">
+          <div className="settings-section__head">
+            <Text variant="subheader-2" as="h2">
+              Интерфейс
+            </Text>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Web Search (агентский)
+              </Text>
+              <Text variant="body-1" color="hint">
+                Разрешить модели вызывать веб-поиск, когда она решит, что это нужно.
+              </Text>
+            </div>
+            <Switch checked={webSearch} onUpdate={handleWebSearch} size="m" />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Стриминг ответов
+              </Text>
+              <Text variant="body-1" color="hint">
+                Показывать ответ по мере генерации (SSE).
+              </Text>
+            </div>
+            <Switch
+              checked={streaming}
+              onUpdate={handleStubToggle(setStreaming)}
+              size="m"
+            />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Цитаты-маркеры
+              </Text>
+              <Text variant="body-1" color="hint">
+                Подсвечивать <span className="settings-cite-sample">[1]</span> кликабельными ссылками на источники.
+              </Text>
+            </div>
+            <Switch
+              checked={showCitations}
+              onUpdate={handleStubToggle(setShowCitations)}
+              size="m"
+            />
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Тема оформления
+              </Text>
+              <Text variant="body-1" color="hint">
+                Light, Dark или системная.
+              </Text>
+            </div>
+            <SegmentedRadioGroup
+              size="m"
+              value={theme}
+              onUpdate={handleTheme}
+              options={[
+                { value: 'light', content: <span className="settings-theme-opt"><Sun /> Light</span> },
+                { value: 'dark', content: <span className="settings-theme-opt"><Moon /> Dark</span> },
+                { value: 'system', content: <span className="settings-theme-opt"><Display /> Системная</span> },
+              ]}
+            />
+          </div>
+        </section>
+
+        {/* ── Yandex Cloud ───────────────────────────────────── */}
+        <section className="settings-section">
+          <div className="settings-section__head">
+            <Text variant="subheader-2" as="h2">
+              Yandex Cloud
+            </Text>
+            <Text variant="body-1" color="secondary">
+              Подключение к AI Studio. Ключи хранятся в <code className="settings-code">server/.env</code>.
+            </Text>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <div className="settings-row__title-line">
+                <Key className="settings-key-icon" />
+                <Text variant="body-2" className="settings-row__title">
+                  YC_API_KEY
+                </Text>
+                <Label theme="success" icon={<Check />}>
+                  Активен
+                </Label>
+              </div>
+              <Text variant="body-1" color="hint" className="settings-mono">
+                AQVN••••••••••••••••••••••••CK4
+              </Text>
+            </div>
+            <Button view="outlined" size="m" onClick={() => {}}>
+              Изменить
+            </Button>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <div className="settings-row__title-line">
+                <Key className="settings-key-icon" />
+                <Text variant="body-2" className="settings-row__title">
+                  YC_SEARCH_API_KEY
+                </Text>
+                <Label theme="success" icon={<Check />}>
+                  Активен
+                </Label>
+              </div>
+              <Text variant="body-1" color="hint" className="settings-mono">
+                AQVN••••••••••••••••••••••••2zG · для Web Search
+              </Text>
+            </div>
+            <Button view="outlined" size="m" onClick={() => {}}>
+              Изменить
+            </Button>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                FOLDER_ID
+              </Text>
+              <Text variant="body-1" color="hint" className="settings-mono">
+                b1g***********dxs
+              </Text>
+            </div>
+            <Button view="outlined" size="m" onClick={() => {}}>
+              Изменить
+            </Button>
+          </div>
+        </section>
+
+        {/* ── Опасная зона ──────────────────────────────────── */}
+        <section className="settings-section">
+          <div className="settings-section__head">
+            <Text variant="subheader-2" as="h2" color="danger">
+              Опасная зона
+            </Text>
+          </div>
+
+          <div className="settings-row settings-row_danger">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Удалить все чаты
+              </Text>
+              <Text variant="body-1" color="hint">
+                Это действие необратимо. Удалятся все чаты, сообщения и источники.
+              </Text>
+            </div>
+            <Button view="outlined-danger" size="m" onClick={handleDeleteAll}>
+              <TrashBin />
+              Удалить
+            </Button>
+          </div>
+        </section>
       </div>
     </div>
   );
