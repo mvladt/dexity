@@ -1,6 +1,6 @@
 # Результат: агентский web search через tool calling
 
-План: [agentic-web-search-plan.md](archive/agentic-web-search-plan.md).
+План: [agentic-web-search-plan.md](agentic-web-search-plan.md).
 
 ## Что сделано
 
