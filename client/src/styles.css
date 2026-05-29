@@ -380,6 +380,26 @@ body,
   min-width: 0;
 }
 
+/* ── Web Fetch: заголовок + резюме страницы внутри ToolMessage ─ */
+
+.dx-fetch-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dx-fetch-body__title {
+  font-weight: 500;
+  color: var(--g-color-text-primary);
+}
+
+.dx-fetch-body__summary {
+  margin: 0;
+  color: var(--g-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .chat-empty {
   flex: 1;
   display: flex;

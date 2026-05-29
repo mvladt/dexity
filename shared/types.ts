@@ -17,8 +17,9 @@ export type PartSnapshot =
   | { type: 'thinking'; content: string }
   | { type: 'tool'; sources: Source[] }
   // Прочитанная страница (web_fetch). Полный контент в БД не пишем — он одноразовый;
-  // храним только url+title, чтобы при reload отрисовать «Прочитана страница».
-  | { type: 'fetch'; url: string; title: string };
+  // храним url + title + компактное LLM-резюме. `error: true` — фетч упал
+  // (сохраняем, чтобы упавшие чтения не исчезали из истории при reload).
+  | { type: 'fetch'; url: string; title?: string; summary?: string; error?: boolean };
 
 export interface MessageToolData {
   sources?: Source[];
@@ -50,9 +51,10 @@ export type SSEEvent =
         status: 'loading' | 'success' | 'error';
         callId: number;
         sources?: Source[];
-        // Только для name:'fetch'. url — на всех статусах, title — на success.
+        // Только для name:'fetch'. url — на всех статусах, title/summary — на success.
         url?: string;
         title?: string;
+        summary?: string;
       };
     }
   | {

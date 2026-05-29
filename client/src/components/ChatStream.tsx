@@ -72,13 +72,19 @@ function buildFetchPart(tool: FetchToolState) {
     };
   }
   // success
+  const hasBody = !!(tool.title || tool.summary);
   return {
     type: 'tool' as const,
     data: {
       ...base,
       status: 'success' as const,
       headerContent: hostOf(tool.url),
-      bodyContent: tool.title ?? null,
+      bodyContent: hasBody ? (
+        <div className="dx-fetch-body">
+          {tool.title ? <div className="dx-fetch-body__title">{tool.title}</div> : null}
+          {tool.summary ? <p className="dx-fetch-body__summary">{tool.summary}</p> : null}
+        </div>
+      ) : null,
       autoCollapseOnSuccess: true,
     },
   };
@@ -167,7 +173,13 @@ function toAikitMessage(msg: Message): TChatMessage {
       for (const p of snapshot) {
         if (p.type === 'thinking') parts.push(buildThinkingPart(p.content, false));
         else if (p.type === 'fetch')
-          parts.push(buildFetchPart({ kind: 'fetch', status: 'success', url: p.url, title: p.title }));
+          parts.push(
+            buildFetchPart(
+              p.error
+                ? { kind: 'fetch', status: 'error', url: p.url }
+                : { kind: 'fetch', status: 'success', url: p.url, title: p.title, summary: p.summary },
+            ),
+          );
         else parts.push(buildToolPart({ kind: 'web', status: 'success', sources: p.sources }));
       }
     } else {

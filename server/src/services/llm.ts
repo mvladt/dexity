@@ -9,6 +9,36 @@ const client = new OpenAI({
   apiKey: config.YC_API_KEY,
 });
 
+// Лёгкая быстрая модель для одноразового резюме прочитанной страницы (web_fetch).
+const SUMMARY_MODEL_ID = 'aliceai-llm-flash';
+
+/**
+ * Делает компактное резюме веб-страницы для превью в плашке Web Fetch.
+ * Отдельный дешёвый вызов — не блокирует основную модель (она получает полный текст).
+ */
+export async function summarizePage(content: string, signal?: AbortSignal): Promise<string> {
+  const fullModel = `gpt://${config.YC_FOLDER_ID}/${SUMMARY_MODEL_ID}/latest`;
+  const res = await client.chat.completions.create(
+    {
+      model: fullModel,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Сделай компактное резюме веб-страницы для превью: 2–3 предложения, максимум 5. ' +
+            'Только суть, без вступлений и воды. Резюме всегда на русском языке, независимо от языка страницы.',
+        },
+        { role: 'user', content },
+      ],
+      stream: false,
+      temperature: 0.3,
+      max_tokens: 400,
+    },
+    { signal },
+  );
+  return res.choices[0]?.message?.content?.trim() ?? '';
+}
+
 export async function streamChat(
   messages: ChatCompletionMessageParam[],
   signal?: AbortSignal,

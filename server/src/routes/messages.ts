@@ -5,7 +5,7 @@ import type { MessageToolData, PartSnapshot, Source } from '../../../shared/type
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
-import { streamChat } from '../services/llm.js';
+import { streamChat, summarizePage } from '../services/llm.js';
 import { webSearch, webSearchTool } from '../services/search.js';
 import { fetchUrl, webFetchTool, type FetchResult } from '../services/fetch.js';
 import { config } from '../config.js';
@@ -118,7 +118,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let callIdSeq = 0;
 
     // Дедупликация fetch-запросов и soft cap в рамках одного ответа
-    const fetchCache = new Map<string, Promise<FetchResult>>();
+    // Кэш хранит обогащённый результат (страница + резюме) — дедуп покрывает и fetch, и summary.
+    const fetchCache = new Map<string, Promise<FetchResult & { summary?: string }>>();
     let fetchCount = 0;
 
     try {
@@ -245,22 +246,29 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
                 return { tcId: tc.id, content: { error: 'Лимит загрузок страниц исчерпан, заверши ответ.' } };
               }
 
-              // Дедупликация: один запрос на уникальный URL
+              // Дедупликация: один запрос на уникальный URL. В кэш кладём промис
+              // «страница + резюме» — резюме делает отдельная лёгкая модель и не
+              // влияет на то, что получит основная модель (ей идёт полный текст).
               let p = fetchCache.get(key);
               if (!p) {
                 fetchCount++;
-                p = fetchUrl(rawUrl, abort.signal);
+                p = fetchUrl(rawUrl, abort.signal).then(async (r) => {
+                  const summary = await summarizePage(r.content, abort.signal).catch(() => '');
+                  return { ...r, summary: summary || undefined };
+                });
                 fetchCache.set(key, p);
               }
 
               try {
                 const res = await p;
-                partsLog.push({ type: 'fetch', url: res.url, title: res.title });
-                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'success', callId, url: res.url, title: res.title } });
+                partsLog.push({ type: 'fetch', url: res.url, title: res.title, ...(res.summary ? { summary: res.summary } : {}) });
+                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'success', callId, url: res.url, title: res.title, ...(res.summary ? { summary: res.summary } : {}) } });
                 return { tcId: tc.id, content: { url: res.url, title: res.title, content: res.content } };
               } catch (err) {
                 if (abort.signal.aborted) return { tcId: tc.id, content: { error: 'aborted' } };
                 request.log.warn({ err }, 'Web fetch failed');
+                // Сохраняем упавший фетч в историю, чтобы он не исчезал при reload.
+                partsLog.push({ type: 'fetch', url: rawUrl, error: true });
                 writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'error', callId, url: rawUrl } });
                 return { tcId: tc.id, content: { error: err instanceof Error ? err.message : 'fetch failed' } };
               }
