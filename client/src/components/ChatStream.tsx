@@ -55,15 +55,16 @@ function buildFetchPart(tool: FetchToolState) {
     toolName: 'Fetch',
     toolIcon: <Icon data={SquareArticle} size={16} />,
   };
-  // На success — кликабельный URL, иначе просто текст URL. Статус (спиннер/ошибка)
-  // рисует сам ToolMessage справа.
+  // Показываем домен (полный URL бывает длинным — captcha, query-параметры).
+  // На success домен кликабелен и ведёт на точную страницу. Статус рисует ToolMessage.
+  const host = hostOf(tool.url);
   const headerContent =
     tool.status === 'success' ? (
       <a className="dx-fetch-link" href={tool.url} target="_blank" rel="noopener noreferrer">
-        {tool.url}
+        {host}
       </a>
     ) : (
-      tool.url
+      host
     );
   return {
     type: 'tool' as const,
