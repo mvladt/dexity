@@ -1,16 +1,29 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Button, Text } from '@gravity-ui/uikit';
-import { Plus, ClockArrowRotateLeft, Gear, Bars } from '@gravity-ui/icons';
+import { Button, Icon, Text } from '@gravity-ui/uikit';
+import {
+  Plus,
+  ClockArrowRotateLeft,
+  Gear,
+  Bars,
+  ArrowRightFromSquare,
+} from '@gravity-ui/icons';
+import { useAuthStore } from '../stores/authStore';
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const clearToken = useAuthStore((s) => s.clearToken);
 
   const navItems = [
     { to: '/', label: 'Новый чат', icon: <Plus />, end: true },
     { to: '/history', label: 'История', icon: <ClockArrowRotateLeft /> },
     { to: '/settings', label: 'Настройки', icon: <Gear /> },
   ];
+
+  const handleLogout = () => {
+    setMobileOpen(false);
+    clearToken();
+  };
 
   const nav = (
     <nav className="app-nav">
@@ -32,6 +45,15 @@ export function AppLayout() {
           </li>
         ))}
       </ul>
+      <div className="app-nav-footer">
+        <div className="app-nav-user">
+          <div className="app-nav-avatar">В</div>
+          <span>Влад</span>
+        </div>
+        <Button view="flat" size="m" title="Выйти" onClick={handleLogout}>
+          <Icon data={ArrowRightFromSquare} />
+        </Button>
+      </div>
     </nav>
   );
 
