@@ -121,6 +121,11 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const fetchCache = new Map<string, Promise<FetchResult>>();
     let fetchCount = 0;
 
+    // Защита от «застревания» reasoning-моделей: qwen3 иногда планирует
+    // tool_call прямо в reasoning_content и завершает ход (finish_reason:stop)
+    // без настоящего вызова и без текста. Один раз принудительно дожимаем ответ.
+    let forcedAnswer = false;
+
     try {
       const llmMessages: ChatCompletionMessageParam[] = [
         ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
@@ -136,7 +141,10 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         // в режиме 'none' эмулируют tool_call в обычном content через свой
         // внутренний DSML-формат, который OpenAI-обёртка не парсит.
         const isFinalRound = round === MAX_TOOL_ROUNDS - 1;
-        const tools = webSearchEnabled && !isFinalRound ? [webSearchTool, webFetchTool] : undefined;
+        const tools =
+          webSearchEnabled && !isFinalRound && !forcedAnswer
+            ? [webSearchTool, webFetchTool]
+            : undefined;
 
         let roundThinking = '';
 
@@ -187,6 +195,19 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           // Финальный ответ получен. Если в этом раунде модель ещё «думала»
           // перед текстом — сохраним этот thinking как последний парт.
           if (roundThinking) partsLog.push({ type: 'thinking', content: roundThinking });
+
+          // Нет вызовов инструментов И нет текста — модель застряла (см. forcedAnswer).
+          // Один раз дожимаем явной инструкцией ответить текстом, без инструментов.
+          if (fullContent.trim() === '' && !forcedAnswer) {
+            forcedAnswer = true;
+            llmMessages.push({
+              role: 'user',
+              content:
+                'Сформулируй финальный ответ пользователю на русском на основе уже собранной информации. ' +
+                'Не вызывай инструменты и не пиши JSON — только текст ответа.',
+            });
+            continue;
+          }
           break;
         }
 
@@ -292,6 +313,16 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           })),
         });
         llmMessages.push(...toolMessages);
+      }
+
+      // Последний рубеж: даже после forcedAnswer текста может не быть (модель
+      // упёрлась в капчу/мусор и так и не сформулировала ответ). Пустое сообщение
+      // выглядит как тупиковый чат — отдаём понятный фолбэк вместо пустоты.
+      if (fullContent.trim() === '') {
+        fullContent =
+          'Не удалось сформировать ответ: не получилось извлечь полезную информацию из источников ' +
+          '(вероятно, страницы закрыты капчей). Попробуйте переформулировать запрос.';
+        writeSSE(reply, { type: 'delta', delta: fullContent });
       }
 
       // Сохраняем toolData при любой tool-активности, не только при наличии источников:
