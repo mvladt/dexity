@@ -6,7 +6,7 @@ import type {
   TChatMessage,
   TSubmitData,
 } from '@gravity-ui/aikit';
-import { FileText, Globe } from '@gravity-ui/icons';
+import { Globe, SquareArticle } from '@gravity-ui/icons';
 import { Icon } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore, type StreamPart, type ToolState } from '../stores/streamStore';
@@ -52,8 +52,8 @@ type WebToolState = Extract<ToolState, { kind: 'web' }>;
 
 function buildFetchPart(tool: FetchToolState) {
   const base = {
-    toolName: 'Read',
-    toolIcon: <Icon data={FileText} size={16} />,
+    toolName: 'Web Fetch',
+    toolIcon: <Icon data={SquareArticle} size={16} />,
   };
   if (tool.status === 'loading') {
     return {
