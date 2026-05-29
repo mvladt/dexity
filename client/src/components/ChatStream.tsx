@@ -6,7 +6,7 @@ import type {
   TChatMessage,
   TSubmitData,
 } from '@gravity-ui/aikit';
-import { Globe } from '@gravity-ui/icons';
+import { FileText, Globe } from '@gravity-ui/icons';
 import { Icon } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore, type StreamPart, type ToolState } from '../stores/streamStore';
@@ -47,7 +47,49 @@ function SourcesList({ sources }: { sources: Source[] }) {
   );
 }
 
+type FetchToolState = Extract<ToolState, { kind: 'fetch' }>;
+type WebToolState = Extract<ToolState, { kind: 'web' }>;
+
+function buildFetchPart(tool: FetchToolState) {
+  const base = {
+    toolName: 'Read',
+    toolIcon: <Icon data={FileText} size={16} />,
+  };
+  if (tool.status === 'loading') {
+    return {
+      type: 'tool' as const,
+      data: { ...base, status: 'loading' as const, headerContent: hostOf(tool.url) },
+    };
+  }
+  if (tool.status === 'error') {
+    return {
+      type: 'tool' as const,
+      data: {
+        ...base,
+        status: 'error' as const,
+        headerContent: 'Не удалось прочитать ' + hostOf(tool.url),
+      },
+    };
+  }
+  // success
+  return {
+    type: 'tool' as const,
+    data: {
+      ...base,
+      status: 'success' as const,
+      headerContent: hostOf(tool.url),
+      bodyContent: tool.title ?? null,
+      autoCollapseOnSuccess: true,
+    },
+  };
+}
+
 function buildToolPart(tool: ToolState) {
+  if (tool.kind === 'fetch') return buildFetchPart(tool);
+  return buildWebPart(tool);
+}
+
+function buildWebPart(tool: WebToolState) {
   const base = {
     toolName: 'Web Search',
     toolIcon: <Icon data={Globe} size={16} />,
@@ -113,24 +155,30 @@ function partsToAikitContent(parts: StreamPart[]): TAssistantMessageContent {
 
 function toAikitMessage(msg: Message): TChatMessage {
   const snapshot = msg.toolData?.parts;
-  const hasTool = !!(msg.toolData?.calls?.length || msg.toolData?.sources?.length);
+  const hasTool = !!(
+    msg.toolData?.calls?.length ||
+    msg.toolData?.sources?.length ||
+    msg.toolData?.parts?.some((p) => p.type === 'tool' || p.type === 'fetch')
+  );
   if (msg.role === 'assistant' && (msg.thinking || hasTool)) {
     const parts: TAssistantMessageContent = [];
     if (snapshot?.length) {
       // Полная последовательность парт в порядке появления (thinking₁, tool₁, thinking₂, …).
       for (const p of snapshot) {
         if (p.type === 'thinking') parts.push(buildThinkingPart(p.content, false));
-        else parts.push(buildToolPart({ status: 'success', sources: p.sources }));
+        else if (p.type === 'fetch')
+          parts.push(buildFetchPart({ kind: 'fetch', status: 'success', url: p.url, title: p.title }));
+        else parts.push(buildToolPart({ kind: 'web', status: 'success', sources: p.sources }));
       }
     } else {
       // Legacy без снапшота: один склеенный thinking + либо calls (новый), либо плоский sources.
       if (msg.thinking) parts.push(buildThinkingPart(msg.thinking, false));
       if (msg.toolData?.calls?.length) {
         for (const sources of msg.toolData.calls) {
-          parts.push(buildToolPart({ status: 'success', sources }));
+          parts.push(buildToolPart({ kind: 'web', status: 'success', sources }));
         }
       } else if (msg.toolData?.sources?.length) {
-        parts.push(buildToolPart({ status: 'success', sources: msg.toolData.sources }));
+        parts.push(buildToolPart({ kind: 'web', status: 'success', sources: msg.toolData.sources }));
       }
     }
     parts.push({ type: 'text', data: { text: msg.content } });

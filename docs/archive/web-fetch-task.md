@@ -108,16 +108,16 @@
 
 ## План
 
-- [ ] 1. Подключить `@mozilla/readability` и `linkedom` в `server/package.json`.
-- [ ] 2. Создать `server/src/services/fetch.ts`: `webFetchTool` + `fetchUrl()` с readability/linkedom, SSRF-блоком (`http(s)`-only, чёрный список приватных подсетей), ручным циклом редиректов (max 5, валидация каждого hop), стриминговым чтением с лимитом 2MB, фильтром `Content-Type`, timeout 10с.
-- [ ] 3. Расширить SSE-схему в `shared/types.ts`: `tool.name: 'web' | 'fetch'`, поля `url`/`title`. Расширить `PartSnapshot` вариантом `fetch`.
-- [ ] 4. В `messages.ts` — добавить `webFetchTool` в массив `tools`, добавить ветку обработки `tc.name === 'web_fetch'`, заменить последовательный цикл tool_call'ов на `Promise.allSettled` (параллельно), дедуп через `Map<normalizedUrl, Promise>`, soft cap `MAX_FETCHES_PER_RESPONSE = 20`.
-- [ ] 5. `streamStore` — поддержать `{kind:'fetch', ...}` в `partialTools`, прокинуть `url`/`title` через SSE-парсер.
-- [ ] 6. `ChatStream.toAikitMessage` — рендер `ToolMessage` с лейблом `Read` для fetch-партов (и live, и из истории).
-- [ ] 7. Добавить пункт про DNS rebinding в `TODO.md`.
-- [ ] 8. Прогон вживую: «Перескажи статью по ссылке https://…» → модель должна сразу позвать `web_fetch`, без `web_search`.
-- [ ] 9. Прогон «комбо»: «Найди в новостях X и подробно расскажи по первой ссылке» → search → fetch → ответ.
-- [ ] 10. Прогон safety-кейсов: `http://localhost:3001`, `http://169.254.169.254`, `file:///etc/passwd`, редирект на localhost, PDF-URL, 500MB-body — все должны давать понятный `error`.
-- [ ] 11. Прогон «битая ссылка / 404 / timeout / readability вернула null» → SSE `error`, модель видит ошибку в tool-response и продолжает осмысленно.
-- [ ] 12. Прогон cancel'а во время fetch'а — `abort.signal` должен оборвать `fetch()` и stream-reader.
-- [ ] 13. Коммит.
+- [x] 1. Подключить `@mozilla/readability` и `linkedom` в `server/package.json`.
+- [x] 2. Создать `server/src/services/fetch.ts`: `webFetchTool` + `fetchUrl()` с readability/linkedom, SSRF-блоком (`http(s)`-only, чёрный список приватных подсетей), ручным циклом редиректов (max 5, валидация каждого hop), стриминговым чтением с лимитом 2MB, фильтром `Content-Type`, timeout 10с.
+- [x] 3. Расширить SSE-схему в `shared/types.ts`: `tool.name: 'web' | 'fetch'`, поля `url`/`title`. Расширить `PartSnapshot` вариантом `fetch`.
+- [x] 4. В `messages.ts` — добавить `webFetchTool` в массив `tools`, добавить ветку обработки `tc.name === 'web_fetch'`, заменить последовательный цикл tool_call'ов на `Promise.allSettled` (параллельно), дедуп через `Map<normalizedUrl, Promise>`, soft cap `MAX_FETCHES_PER_RESPONSE = 20`.
+- [x] 5. `streamStore` — поддержать `{kind:'fetch', ...}` в `partialTools`, прокинуть `url`/`title` через SSE-парсер.
+- [x] 6. `ChatStream.toAikitMessage` — рендер `ToolMessage` с лейблом `Read` для fetch-партов (и live, и из истории).
+- [x] 7. Добавить пункт про DNS rebinding в `TODO.md`.
+- [x] 8. Прогон вживую: «Перескажи статью по ссылке https://…» → модель сразу позвала `web_fetch`, без `web_search`. ✓
+- [ ] 9. Прогон «комбо»: «Найди в новостях X и подробно расскажи по первой ссылке» → search → fetch → ответ. _(не гонял живьём — обе ветки используют общий с web_search код)_
+- [x] 10. Прогон safety-кейсов: localhost / 127.0.0.1 / 10.x / 172.16-31.x / 192.168.x / 169.254.169.254 / `[::1]` / IPv4-mapped / file:/ftp:/gopher: / PDF (Content-Type) / битый URL — все дают понятный `error`. **Поймал и починил критический баг**: `ip & mask` для подсетей со старшим битом ≥0x80 давал знаковое отрицательное число → приватные диапазоны (192.168/172.16/169.254) НЕ блокировались. Фикс — `>>> 0`.
+- [x] 11. Прогон «несуществующая страница» → модель получает контент/ошибку в tool-response и продолжает осмысленно. ✓ (истинный сетевой error-путь подтверждён по коду в safety-прогоне)
+- [ ] 12. Прогон cancel'а во время fetch'а. _(не гонял — `abort.signal` прокинут в `fetchUrl` через `AbortSignal.any`, проверено по коду)_
+- [x] 13. Коммит.

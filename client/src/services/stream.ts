@@ -1,4 +1,4 @@
-import type { MessageToolData, SSEEvent, Source } from '../types';
+import type { MessageToolData, SSEEvent } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
 const BASE = import.meta.env.VITE_API_URL ?? '';
@@ -6,7 +6,7 @@ const BASE = import.meta.env.VITE_API_URL ?? '';
 interface StreamCallbacks {
   onThinkingDelta?: (delta: string) => void;
   onDelta: (delta: string) => void;
-  onTool?: (status: 'loading' | 'success' | 'error', sources: Source[] | undefined, callId: number) => void;
+  onTool?: (tool: Extract<SSEEvent, { type: 'tool' }>['tool']) => void;
   onDone: (
     fullContent: string,
     assistantMessageId: number,
@@ -91,7 +91,7 @@ export async function streamMessages(
           } else if (event.type === 'delta') {
             callbacks.onDelta(event.delta);
           } else if (event.type === 'tool') {
-            callbacks.onTool?.(event.tool.status, event.tool.sources, event.tool.callId);
+            callbacks.onTool?.(event.tool);
           } else if (event.type === 'done') {
             callbacks.onDone(
               event.fullContent,

@@ -15,7 +15,10 @@ export interface Source {
 
 export type PartSnapshot =
   | { type: 'thinking'; content: string }
-  | { type: 'tool'; sources: Source[] };
+  | { type: 'tool'; sources: Source[] }
+  // Прочитанная страница (web_fetch). Полный контент в БД не пишем — он одноразовый;
+  // храним только url+title, чтобы при reload отрисовать «Прочитана страница».
+  | { type: 'fetch'; url: string; title: string };
 
 export interface MessageToolData {
   sources?: Source[];
@@ -42,10 +45,14 @@ export type SSEEvent =
   | {
       type: 'tool';
       tool: {
-        name: 'web';
+        // 'web' — web_search (источники), 'fetch' — web_fetch (чтение страницы).
+        name: 'web' | 'fetch';
         status: 'loading' | 'success' | 'error';
         callId: number;
         sources?: Source[];
+        // Только для name:'fetch'. url — на всех статусах, title — на success.
+        url?: string;
+        title?: string;
       };
     }
   | {

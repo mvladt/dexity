@@ -2,12 +2,15 @@ import { create } from 'zustand';
 import { streamMessages } from '../services/stream';
 import { useChatStore } from './chatStore';
 import { useSettingsStore } from './settingsStore';
-import type { Source } from '../types';
+import type { Source, SSEEvent } from '../types';
 
 export type ToolState =
-  | { status: 'loading' }
-  | { status: 'success'; sources: Source[] }
-  | { status: 'error' };
+  | { kind: 'web'; status: 'loading' }
+  | { kind: 'web'; status: 'success'; sources: Source[] }
+  | { kind: 'web'; status: 'error' }
+  | { kind: 'fetch'; status: 'loading'; url: string }
+  | { kind: 'fetch'; status: 'success'; url: string; title?: string }
+  | { kind: 'fetch'; status: 'error'; url: string };
 
 export type StreamPart =
   | { type: 'thinking'; content: string }
@@ -77,13 +80,25 @@ export const useStreamStore = create<StreamStore>()((set) => ({
           return { parts };
         }),
 
-      onTool: (status, sources, callId) => {
-        const state: ToolState =
-          status === 'success'
-            ? { status: 'success', sources: sources ?? [] }
-            : status === 'error'
-              ? { status: 'error' }
-              : { status: 'loading' };
+      onTool: (tool: Extract<SSEEvent, { type: 'tool' }>['tool']) => {
+        let state: ToolState;
+        if (tool.name === 'fetch') {
+          const url = tool.url ?? '';
+          state =
+            tool.status === 'success'
+              ? { kind: 'fetch', status: 'success', url, title: tool.title }
+              : tool.status === 'error'
+                ? { kind: 'fetch', status: 'error', url }
+                : { kind: 'fetch', status: 'loading', url };
+        } else {
+          state =
+            tool.status === 'success'
+              ? { kind: 'web', status: 'success', sources: tool.sources ?? [] }
+              : tool.status === 'error'
+                ? { kind: 'web', status: 'error' }
+                : { kind: 'web', status: 'loading' };
+        }
+        const callId = tool.callId;
         set((s) => {
           const parts = [...s.parts];
           const idx = parts.findIndex((p) => p.type === 'tool' && p.callId === callId);

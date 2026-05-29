@@ -7,6 +7,7 @@ import { db } from '../db/client.js';
 import { chats, messages } from '../db/schema.js';
 import { streamChat } from '../services/llm.js';
 import { webSearch, webSearchTool } from '../services/search.js';
+import { fetchUrl, webFetchTool, type FetchResult } from '../services/fetch.js';
 import { config } from '../config.js';
 
 // Сколько раундов модели разрешено вызывать tools. Последний раунд — без
@@ -14,6 +15,7 @@ import { config } from '../config.js';
 // много искать (3-х было мало — на финальном round без tools она лезет
 // в content DSML-формат tool_call'а вместо обычного текста).
 const MAX_TOOL_ROUNDS = 10;
+const MAX_FETCHES_PER_RESPONSE = 20;
 
 const chatIdSchema = z.coerce.number().int().positive();
 const streamBodySchema = z.object({
@@ -115,6 +117,10 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let sourcePosition = 1;
     let callIdSeq = 0;
 
+    // Дедупликация fetch-запросов и soft cap в рамках одного ответа
+    const fetchCache = new Map<string, Promise<FetchResult>>();
+    let fetchCount = 0;
+
     try {
       const llmMessages: ChatCompletionMessageParam[] = [
         ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
@@ -130,7 +136,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         // в режиме 'none' эмулируют tool_call в обычном content через свой
         // внутренний DSML-формат, который OpenAI-обёртка не парсит.
         const isFinalRound = round === MAX_TOOL_ROUNDS - 1;
-        const tools = webSearchEnabled && !isFinalRound ? [webSearchTool] : undefined;
+        const tools = webSearchEnabled && !isFinalRound ? [webSearchTool, webFetchTool] : undefined;
 
         let roundThinking = '';
 
@@ -188,46 +194,90 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         // этого раунда (если был), чтобы при reload видеть interleaving.
         if (roundThinking) partsLog.push({ type: 'thinking', content: roundThinking });
 
-        // Выполняем каждый tool_call и собираем tool-messages для следующего раунда
-        const toolMessages: ChatCompletionMessageParam[] = [];
+        // Параллельно выполняем все tool_call'ы раунда.
+        // callId раздаём заранее, чтобы loading-SSE ушли пачкой в порядке списка.
+        const calls = toolCallsList.map((tc) => ({ tc, callId: callIdSeq++ }));
 
-        for (const tc of toolCallsList) {
-          const callId = callIdSeq++;
+        const results = await Promise.allSettled(
+          calls.map(async ({ tc, callId }) => {
+            // Парсим аргументы — ошибка не бросается наружу
+            let parsedArgs: { query?: string; url?: string } = {};
+            try {
+              parsedArgs = JSON.parse(tc.arguments);
+            } catch {
+              return { tcId: tc.id, content: { error: 'invalid arguments' } };
+            }
 
-          let parsedArgs: { query?: string } = {};
-          try {
-            parsedArgs = JSON.parse(tc.arguments);
-          } catch {
-            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'invalid arguments' }) });
-            continue;
-          }
+            if (tc.name === 'web_search') {
+              const query = parsedArgs.query ?? '';
+              writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading', callId } });
+              try {
+                const rawSources = await webSearch(query, abort.signal);
+                // JS однопоточный — мутация счётчика безопасна
+                const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
+                allSources.push(...sources);
+                callsSources.push(sources);
+                partsLog.push({ type: 'tool', sources });
+                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
+                return { tcId: tc.id, content: sources };
+              } catch (err) {
+                if (abort.signal.aborted) return { tcId: tc.id, content: { error: 'aborted' } };
+                request.log.warn({ err }, 'Web search failed');
+                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error', callId } });
+                return { tcId: tc.id, content: { error: 'search failed' } };
+              }
+            }
 
-          if (tc.name !== 'web_search') {
-            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'unknown tool' }) });
-            continue;
-          }
+            if (tc.name === 'web_fetch') {
+              const rawUrl = parsedArgs.url ?? '';
+              // Нормализуем ключ дедупликации
+              let key: string;
+              try {
+                key = new URL(rawUrl).toString();
+              } catch {
+                key = rawUrl;
+              }
+              writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'loading', callId, url: rawUrl } });
 
-          const query = parsedArgs.query ?? '';
-          writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading', callId } });
+              // Soft cap: блокируем новые запросы после лимита (кешированные пропускаем)
+              if (fetchCount >= MAX_FETCHES_PER_RESPONSE && !fetchCache.has(key)) {
+                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'error', callId, url: rawUrl } });
+                return { tcId: tc.id, content: { error: 'Лимит загрузок страниц исчерпан, заверши ответ.' } };
+              }
 
-          try {
-            const rawSources = await webSearch(query, abort.signal);
-            if (abort.signal.aborted) return;
+              // Дедупликация: один запрос на уникальный URL
+              let p = fetchCache.get(key);
+              if (!p) {
+                fetchCount++;
+                p = fetchUrl(rawUrl, abort.signal);
+                fetchCache.set(key, p);
+              }
 
-            const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
-            allSources.push(...sources);
-            callsSources.push(sources);
-            partsLog.push({ type: 'tool', sources });
+              try {
+                const res = await p;
+                partsLog.push({ type: 'fetch', url: res.url, title: res.title });
+                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'success', callId, url: res.url, title: res.title } });
+                return { tcId: tc.id, content: { url: res.url, title: res.title, content: res.content } };
+              } catch (err) {
+                if (abort.signal.aborted) return { tcId: tc.id, content: { error: 'aborted' } };
+                request.log.warn({ err }, 'Web fetch failed');
+                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'error', callId, url: rawUrl } });
+                return { tcId: tc.id, content: { error: err instanceof Error ? err.message : 'fetch failed' } };
+              }
+            }
 
-            writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
-            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(sources) });
-          } catch (err) {
-            if (abort.signal.aborted) return;
-            request.log.warn({ err }, 'Web search failed');
-            writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error', callId } });
-            toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ error: 'search failed' }) });
-          }
-        }
+            return { tcId: tc.id, content: { error: 'unknown tool' } };
+          }),
+        );
+
+        if (abort.signal.aborted) return;
+
+        // Собираем tool-messages в порядке calls (гарантирует соответствие tool_call_id)
+        const toolMessages: ChatCompletionMessageParam[] = results.map((r, i) =>
+          r.status === 'fulfilled'
+            ? { role: 'tool', tool_call_id: r.value.tcId, content: JSON.stringify(r.value.content) }
+            : { role: 'tool', tool_call_id: calls[i].tc.id, content: JSON.stringify({ error: 'tool failed' }) },
+        );
 
         // Добавляем assistant-сообщение с tool_calls и ответы tool'ов в историю
         llmMessages.push({
@@ -242,10 +292,12 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         llmMessages.push(...toolMessages);
       }
 
-      const toolData: MessageToolData | null =
-        allSources.length > 0
-          ? { sources: allSources, calls: callsSources, parts: partsLog }
-          : null;
+      // Сохраняем toolData при любой tool-активности, не только при наличии источников:
+      // fetch-парты тоже должны воспроизводиться после reload.
+      const hasTools = partsLog.some((p) => p.type === 'tool' || p.type === 'fetch');
+      const toolData: MessageToolData | null = hasTools
+        ? { sources: allSources, calls: callsSources, parts: partsLog }
+        : null;
 
       const [assistantMsg] = await db
         .insert(messages)
