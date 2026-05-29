@@ -35,27 +35,35 @@
 **Защита от циклов**: `MAX_TOOL_ROUNDS = 3`. Если модель упёрлась — форсим финальный ответ через `tool_choice: 'none'` на последней итерации.
 
 **Tools schema**:
+
 ```ts
-const tools = [{
-  type: 'function',
-  function: {
-    name: 'web_search',
-    description: 'Ищет актуальную информацию в интернете. Используй для свежих событий, цен, новостей, фактов после твоего обучения.',
-    parameters: {
-      type: 'object',
-      properties: { query: { type: 'string', description: 'Поисковый запрос на русском' } },
-      required: ['query'],
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description:
+        "Ищет актуальную информацию в интернете. Используй для свежих событий, цен, новостей, фактов после твоего обучения.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Поисковый запрос на русском" },
+        },
+        required: ["query"],
+      },
     },
   },
-}];
+];
 ```
 
 ### SSE-протокол: что меняется
 
 Сейчас:
+
 - `tool` событие шлётся **один раз** до `delta`-стрима.
 
 Будет:
+
 - `tool` события могут приходить **между** раундами стрима, **несколько раз**.
 - Каждое `tool` событие получает `callId` (индекс из tool_calls), чтобы фронт мог их различать.
 - Тип события (`loading` / `success` / `error`) остаётся как сейчас.
@@ -63,14 +71,17 @@ const tools = [{
 ### Frontend
 
 `streamStore.ts`:
+
 - Заменить `partialTool: ToolState | null` на `partialTools: Map<callId, ToolState>` (или массив).
 - `toolData.sources` — union всех `sources` из всех успешных tool_calls (по позиции — перенумеровать сквозно).
 
 `ChatStream.tsx`:
+
 - Рендерить несколько `ToolMessage` партов подряд — по одному на каждый раунд.
 - Парт-структура одного assistant-сообщения: `[tool1, tool2?, thinking?, text]`.
 
 `ChatComposer.tsx`:
+
 - **Убрать** тогл «Web» из footer'а.
 - Поведение «вкл/выкл» теперь определяется системно: `tools` всегда передаётся (модель решает).
 - В `settingsStore` — оставить существующий флаг `webSearchEnabled` (по умолчанию `true`). Имя не меняем: это per-tool флаг, при будущем добавлении других tools у каждого свой `xxxEnabled`. Если `false` — backend не передаёт `tools` в запросе. UI для этого флага — на странице `/settings`, не в composer'е.
