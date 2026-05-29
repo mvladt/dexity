@@ -380,24 +380,32 @@ body,
   min-width: 0;
 }
 
-/* ── Web Fetch: заголовок + резюме страницы внутри ToolMessage ─ */
+/* ── Fetch: заголовок-ссылка на прочитанную страницу ─────────── */
 
-.dx-fetch-body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.dx-fetch-body__title {
-  font-weight: 500;
+.dx-fetch-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
   color: var(--g-color-text-primary);
+  text-decoration: none;
 }
 
-.dx-fetch-body__summary {
-  margin: 0;
+.dx-fetch-link:hover .dx-fetch-link__title {
+  text-decoration: underline;
+}
+
+.dx-fetch-link__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.dx-fetch-link__host {
   color: var(--g-color-text-secondary);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .chat-empty {

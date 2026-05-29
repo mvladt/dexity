@@ -52,40 +52,39 @@ type WebToolState = Extract<ToolState, { kind: 'web' }>;
 
 function buildFetchPart(tool: FetchToolState) {
   const base = {
-    toolName: 'Web Fetch',
+    toolName: 'Fetch',
     toolIcon: <Icon data={SquareArticle} size={16} />,
   };
+  const host = hostOf(tool.url);
   if (tool.status === 'loading') {
     return {
       type: 'tool' as const,
-      data: { ...base, status: 'loading' as const, headerContent: hostOf(tool.url) },
+      data: { ...base, status: 'loading' as const, headerContent: host },
     };
   }
   if (tool.status === 'error') {
     return {
       type: 'tool' as const,
-      data: {
-        ...base,
-        status: 'error' as const,
-        headerContent: 'Не удалось прочитать ' + hostOf(tool.url),
-      },
+      data: { ...base, status: 'error' as const, headerContent: 'Не удалось прочитать ' + host },
     };
   }
-  // success
-  const hasBody = !!(tool.title || tool.summary);
+  // success — заголовок-ссылка на прочитанную страницу (провенанс), без разворота.
   return {
     type: 'tool' as const,
     data: {
       ...base,
       status: 'success' as const,
-      headerContent: hostOf(tool.url),
-      bodyContent: hasBody ? (
-        <div className="dx-fetch-body">
-          {tool.title ? <div className="dx-fetch-body__title">{tool.title}</div> : null}
-          {tool.summary ? <p className="dx-fetch-body__summary">{tool.summary}</p> : null}
-        </div>
-      ) : null,
-      autoCollapseOnSuccess: true,
+      headerContent: (
+        <a
+          className="dx-fetch-link"
+          href={tool.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span className="dx-fetch-link__title">{tool.title || host}</span>
+          {tool.title ? <span className="dx-fetch-link__host">{host}</span> : null}
+        </a>
+      ),
     },
   };
 }
@@ -97,7 +96,7 @@ function buildToolPart(tool: ToolState) {
 
 function buildWebPart(tool: WebToolState) {
   const base = {
-    toolName: 'Web Search',
+    toolName: 'Search',
     toolIcon: <Icon data={Globe} size={16} />,
   };
   if (tool.status === 'loading') {
@@ -177,7 +176,7 @@ function toAikitMessage(msg: Message): TChatMessage {
             buildFetchPart(
               p.error
                 ? { kind: 'fetch', status: 'error', url: p.url }
-                : { kind: 'fetch', status: 'success', url: p.url, title: p.title, summary: p.summary },
+                : { kind: 'fetch', status: 'success', url: p.url, title: p.title },
             ),
           );
         else parts.push(buildToolPart({ kind: 'web', status: 'success', sources: p.sources }));

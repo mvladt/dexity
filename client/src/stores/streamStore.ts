@@ -9,7 +9,7 @@ export type ToolState =
   | { kind: 'web'; status: 'success'; sources: Source[] }
   | { kind: 'web'; status: 'error' }
   | { kind: 'fetch'; status: 'loading'; url: string }
-  | { kind: 'fetch'; status: 'success'; url: string; title?: string; summary?: string }
+  | { kind: 'fetch'; status: 'success'; url: string; title?: string }
   | { kind: 'fetch'; status: 'error'; url: string };
 
 export type StreamPart =
@@ -86,7 +86,7 @@ export const useStreamStore = create<StreamStore>()((set) => ({
           const url = tool.url ?? '';
           state =
             tool.status === 'success'
-              ? { kind: 'fetch', status: 'success', url, title: tool.title, summary: tool.summary }
+              ? { kind: 'fetch', status: 'success', url, title: tool.title }
               : tool.status === 'error'
                 ? { kind: 'fetch', status: 'error', url }
                 : { kind: 'fetch', status: 'loading', url };
