@@ -55,37 +55,19 @@ function buildFetchPart(tool: FetchToolState) {
     toolName: 'Fetch',
     toolIcon: <Icon data={SquareArticle} size={16} />,
   };
-  const host = hostOf(tool.url);
-  if (tool.status === 'loading') {
-    return {
-      type: 'tool' as const,
-      data: { ...base, status: 'loading' as const, headerContent: host },
-    };
-  }
-  if (tool.status === 'error') {
-    return {
-      type: 'tool' as const,
-      data: { ...base, status: 'error' as const, headerContent: 'Не удалось прочитать ' + host },
-    };
-  }
-  // success — заголовок-ссылка на прочитанную страницу (провенанс), без разворота.
+  // На success — кликабельный URL, иначе просто текст URL. Статус (спиннер/ошибка)
+  // рисует сам ToolMessage справа.
+  const headerContent =
+    tool.status === 'success' ? (
+      <a className="dx-fetch-link" href={tool.url} target="_blank" rel="noopener noreferrer">
+        {tool.url}
+      </a>
+    ) : (
+      tool.url
+    );
   return {
     type: 'tool' as const,
-    data: {
-      ...base,
-      status: 'success' as const,
-      headerContent: (
-        <a
-          className="dx-fetch-link"
-          href={tool.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span className="dx-fetch-link__title">{tool.title || host}</span>
-          {tool.title ? <span className="dx-fetch-link__host">{host}</span> : null}
-        </a>
-      ),
-    },
+    data: { ...base, status: tool.status, headerContent },
   };
 }
 

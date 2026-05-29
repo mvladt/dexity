@@ -380,32 +380,19 @@ body,
   min-width: 0;
 }
 
-/* ── Fetch: заголовок-ссылка на прочитанную страницу ─────────── */
+/* ── Fetch: URL прочитанной страницы ─────────────────────────── */
 
 .dx-fetch-link {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-  color: var(--g-color-text-primary);
+  color: var(--g-color-text-secondary);
   text-decoration: none;
-}
-
-.dx-fetch-link:hover .dx-fetch-link__title {
-  text-decoration: underline;
-}
-
-.dx-fetch-link__title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
 
-.dx-fetch-link__host {
-  color: var(--g-color-text-secondary);
-  font-size: 12px;
-  flex-shrink: 0;
+.dx-fetch-link:hover {
+  text-decoration: underline;
 }
 
 .chat-empty {
