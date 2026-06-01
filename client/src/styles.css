@@ -9,6 +9,12 @@
 .g-root {
   --g-text-body-1-font-size: 15px;
   --g-text-body-1-line-height: 20px;
+
+  /* Инлайн-код — нейтральная плашка вместо синего YFM-дефолта: цвет основного
+     текста на сером фоне. Токены адаптивны, поэтому одно правило на обе темы. */
+  --yfm-color-inline-code: var(--g-color-text-primary);
+  --yfm-color-inline-code-background: var(--g-color-base-generic);
+  --yfm-color-code-hovered-background: var(--g-color-base-generic-hover);
 }
 
 /* Темизация подсветки кода — через публичный API @diplodoc/transform.
@@ -45,9 +51,6 @@
   --yfm-color-table-head-background: var(--g-color-base-generic);
   --yfm-color-table-stripe-row-background: var(--g-color-base-generic-ultralight);
   --yfm-color-border: var(--g-color-line-generic);
-  --yfm-color-inline-code: var(--g-color-text-misc);
-  --yfm-color-inline-code-background: var(--g-color-base-misc-light);
-  --yfm-color-code-hovered-background: var(--g-color-base-misc-medium);
 }
 
 /* По умолчанию diplodoc даёт .yfm code { font-size: 0.875em } — это правило бьёт
