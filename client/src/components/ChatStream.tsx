@@ -6,7 +6,7 @@ import type {
   TChatMessage,
   TSubmitData,
 } from '@gravity-ui/aikit';
-import { Globe, SquareArticle } from '@gravity-ui/icons';
+import { Globe, Magnifier } from '@gravity-ui/icons';
 import { Icon } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore, type StreamPart, type ToolState } from '../stores/streamStore';
@@ -53,7 +53,7 @@ type WebToolState = Extract<ToolState, { kind: 'web' }>;
 function buildFetchPart(tool: FetchToolState) {
   const base = {
     toolName: 'Fetch',
-    toolIcon: <Icon data={SquareArticle} size={16} />,
+    toolIcon: <Icon data={Globe} size={16} />,
   };
   // Показываем домен (полный URL бывает длинным — captcha, query-параметры).
   // На success домен кликабелен и ведёт на точную страницу. Статус рисует ToolMessage.
@@ -77,15 +77,23 @@ function buildToolPart(tool: ToolState) {
   return buildWebPart(tool);
 }
 
+// Длинный запрос обрезаем — плашка не должна растягиваться на весь экран.
+const QUERY_MAX_LEN = 64;
+function truncateQuery(query: string): string {
+  return query.length > QUERY_MAX_LEN ? `${query.slice(0, QUERY_MAX_LEN).trimEnd()}…` : query;
+}
+
 function buildWebPart(tool: WebToolState) {
   const base = {
     toolName: 'Search',
-    toolIcon: <Icon data={Globe} size={16} />,
+    toolIcon: <Icon data={Magnifier} size={16} />,
   };
+  // Показываем сам запрос. Если его нет (legacy-история) — откатываемся к статусным текстам.
+  const queryHeader = tool.query ? truncateQuery(tool.query) : null;
   if (tool.status === 'loading') {
     return {
       type: 'tool' as const,
-      data: { ...base, status: 'loading' as const, headerContent: 'Yandex Search…' },
+      data: { ...base, status: 'loading' as const, headerContent: queryHeader ?? 'Yandex Search…' },
     };
   }
   if (tool.status === 'error') {
@@ -94,7 +102,7 @@ function buildWebPart(tool: WebToolState) {
       data: {
         ...base,
         status: 'error' as const,
-        headerContent: 'Поиск не сработал',
+        headerContent: queryHeader ?? 'Поиск не сработал',
       },
     };
   }
@@ -105,9 +113,8 @@ function buildWebPart(tool: WebToolState) {
       ...base,
       status: 'success' as const,
       headerContent:
-        tool.sources.length > 0
-          ? `${tool.sources.length} источников`
-          : 'Источники не найдены',
+        queryHeader ??
+        (tool.sources.length > 0 ? `${tool.sources.length} источников` : 'Источники не найдены'),
       bodyContent: tool.sources.length > 0 ? <SourcesList sources={tool.sources} /> : null,
       autoCollapseOnSuccess: true,
     },
@@ -162,17 +169,17 @@ function toAikitMessage(msg: Message): TChatMessage {
                 : { kind: 'fetch', status: 'success', url: p.url, title: p.title },
             ),
           );
-        else parts.push(buildToolPart({ kind: 'web', status: 'success', sources: p.sources }));
+        else parts.push(buildToolPart({ kind: 'web', status: 'success', query: p.query ?? '', sources: p.sources }));
       }
     } else {
       // Legacy без снапшота: один склеенный thinking + либо calls (новый), либо плоский sources.
       if (msg.thinking) parts.push(buildThinkingPart(msg.thinking, false));
       if (msg.toolData?.calls?.length) {
         for (const sources of msg.toolData.calls) {
-          parts.push(buildToolPart({ kind: 'web', status: 'success', sources }));
+          parts.push(buildToolPart({ kind: 'web', status: 'success', query: '', sources }));
         }
       } else if (msg.toolData?.sources?.length) {
-        parts.push(buildToolPart({ kind: 'web', status: 'success', sources: msg.toolData.sources }));
+        parts.push(buildToolPart({ kind: 'web', status: 'success', query: '', sources: msg.toolData.sources }));
       }
     }
     parts.push({ type: 'text', data: { text: msg.content } });

@@ -383,16 +383,12 @@ body,
 /* ── Fetch: URL прочитанной страницы ─────────────────────────── */
 
 .dx-fetch-link {
-  color: var(--g-color-text-secondary);
+  color: var(--g-color-text-complementary);
   text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-.dx-fetch-link:hover {
-  text-decoration: underline;
 }
 
 .chat-empty {

@@ -5,9 +5,9 @@ import { useSettingsStore } from './settingsStore';
 import type { Source, SSEEvent } from '../types';
 
 export type ToolState =
-  | { kind: 'web'; status: 'loading' }
-  | { kind: 'web'; status: 'success'; sources: Source[] }
-  | { kind: 'web'; status: 'error' }
+  | { kind: 'web'; status: 'loading'; query: string }
+  | { kind: 'web'; status: 'success'; query: string; sources: Source[] }
+  | { kind: 'web'; status: 'error'; query: string }
   | { kind: 'fetch'; status: 'loading'; url: string }
   | { kind: 'fetch'; status: 'success'; url: string; title?: string }
   | { kind: 'fetch'; status: 'error'; url: string };
@@ -91,12 +91,13 @@ export const useStreamStore = create<StreamStore>()((set) => ({
                 ? { kind: 'fetch', status: 'error', url }
                 : { kind: 'fetch', status: 'loading', url };
         } else {
+          const query = tool.query ?? '';
           state =
             tool.status === 'success'
-              ? { kind: 'web', status: 'success', sources: tool.sources ?? [] }
+              ? { kind: 'web', status: 'success', query, sources: tool.sources ?? [] }
               : tool.status === 'error'
-                ? { kind: 'web', status: 'error' }
-                : { kind: 'web', status: 'loading' };
+                ? { kind: 'web', status: 'error', query }
+                : { kind: 'web', status: 'loading', query };
         }
         const callId = tool.callId;
         set((s) => {

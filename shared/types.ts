@@ -15,7 +15,7 @@ export interface Source {
 
 export type PartSnapshot =
   | { type: 'thinking'; content: string }
-  | { type: 'tool'; sources: Source[] }
+  | { type: 'tool'; query?: string; sources: Source[] }
   // Прочитанная страница (web_fetch). Контент в БД не пишем — он одноразовый;
   // храним url + title (для кликабельной ссылки-провенанса). `error: true` —
   // фетч упал (сохраняем, чтобы упавшие чтения не исчезали из истории при reload).
@@ -51,6 +51,8 @@ export type SSEEvent =
         status: 'loading' | 'success' | 'error';
         callId: number;
         sources?: Source[];
+        // Только для name:'web'. Поисковый запрос — показываем в плашке Search.
+        query?: string;
         // Только для name:'fetch'. url — на всех статусах, title — на success.
         url?: string;
         title?: string;
