@@ -256,13 +256,17 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     return () => clearTimeout(t);
   }, [isWaitingFirstToken]);
 
-  const chatStatus = streaming
-    ? parts.length > 0
-      ? 'streaming'
-      : showSubmittedLoader
-        ? 'submitted'
-        : 'ready'
-    : 'ready';
+  // MessageList рисует errorMessage только при status==='error' — иначе ошибка
+  // стрима молча теряется (стрим обрывается, а в UI ни лоадера, ни текста).
+  const chatStatus = error
+    ? 'error'
+    : streaming
+      ? parts.length > 0
+        ? 'streaming'
+        : showSubmittedLoader
+          ? 'submitted'
+          : 'ready'
+      : 'ready';
 
   const maxContext = getModel(model).maxContext;
   const usedTokens = messages

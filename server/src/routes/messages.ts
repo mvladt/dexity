@@ -231,20 +231,20 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
             if (tc.name === 'web_search') {
               const query = parsedArgs.query ?? '';
-              writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading', callId } });
+              writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'loading', callId, query } });
               try {
                 const rawSources = await webSearch(query, abort.signal);
                 // JS однопоточный — мутация счётчика безопасна
                 const sources: Source[] = rawSources.map((s) => ({ ...s, position: sourcePosition++ }));
                 allSources.push(...sources);
                 callsSources.push(sources);
-                partsLog.push({ type: 'tool', sources });
-                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId } });
+                partsLog.push({ type: 'tool', query, sources });
+                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'success', sources, callId, query } });
                 return { tcId: tc.id, content: sources };
               } catch (err) {
                 if (abort.signal.aborted) return { tcId: tc.id, content: { error: 'aborted' } };
                 request.log.warn({ err }, 'Web search failed');
-                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error', callId } });
+                writeSSE(reply, { type: 'tool', tool: { name: 'web', status: 'error', callId, query } });
                 return { tcId: tc.id, content: { error: 'search failed' } };
               }
             }
@@ -372,7 +372,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
       request.log.error({ err }, 'Stream failed');
 
-      const status = (err as { status?: number })?.status;
+      const apiErr = err as { status?: number; error?: { message?: string } };
+      const status = apiErr?.status;
       let code: 'auth' | 'quota' | 'server' = 'server';
       let message = 'Сервис недоступен, попробуйте позже';
 
@@ -382,6 +383,11 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       } else if (status === 429) {
         code = 'quota';
         message = 'Лимит запросов исчерпан';
+      } else if (apiErr?.error?.message) {
+        // Прокидываем реальное сообщение Yandex (например, «Failed to get
+        // model» при неверном MODEL_ID) — иначе любая проблема выглядит как
+        // абстрактное «сервис недоступен».
+        message = apiErr.error.message;
       }
 
       try {
