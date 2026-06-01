@@ -43,7 +43,7 @@ dexity/
 | `ACCESS_TOKEN`     | Единый токен авторизации                       | `mysecrettoken`         |
 | `YC_FOLDER_ID` | ID каталога Yandex Cloud                       | `b1gxxxxxxxx`           |
 | `YC_API_KEY`   | API-ключ Yandex Cloud (IAM или сервис-аккаунт) | `AQVN...`               |
-| `MODEL_ID`         | ID модели (без folderId)                       | `qwen3-235b-a22b-fp8`   |
+| `MODEL_ID`         | ID модели (без folderId)                       | `deepseek-v4`           |
 | `DATABASE_PATH`    | Путь к файлу SQLite                            | `./data/db.sqlite3`     |
 | `CORS_ORIGIN`      | Origin для CORS (только в dev)                 | `http://localhost:5173` |
 
@@ -52,7 +52,7 @@ dexity/
 > **Yandex AI Studio (OpenAI-совместимый API):**
 >
 > - `base_url = https://llm.api.cloud.yandex.net/v1`
-> - Модель по умолчанию — `qwen3-235b-a22b-fp8` (Qwen3 MoE 235B / 22B активных, fp8). Поменять на `yandexgpt/latest` или другую — через `MODEL_ID`.
+> - Модель по умолчанию — `deepseek-v4` (DeepSeek V4 Flash, контекст 1M). Поменять на `yandexgpt/latest` или другую — через `MODEL_ID`.
 
 ### Client (`client/.env`)
 
