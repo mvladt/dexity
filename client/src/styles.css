@@ -35,6 +35,19 @@
   --yfm-color-hljs-meta: #56b6c2;
   --yfm-color-hljs-meta-string: #98c379;
   --yfm-color-hljs-pseudo: #c678dd;
+
+  /* YFM-дефолты захардкожены под светлую тему (#fff фон таблицы, #333 текст,
+     синий инлайн-код) — в тёмной теме это белые плашки и нечитаемый текст.
+     Привязываем публичные YFM-переменные к токенам gravity-ui. */
+  --yfm-color-table: var(--g-color-text-primary);
+  --yfm-color-table-background: transparent;
+  --yfm-color-table-border: var(--g-color-line-generic);
+  --yfm-color-table-head-background: var(--g-color-base-generic);
+  --yfm-color-table-stripe-row-background: var(--g-color-base-generic-ultralight);
+  --yfm-color-border: var(--g-color-line-generic);
+  --yfm-color-inline-code: var(--g-color-text-misc);
+  --yfm-color-inline-code-background: var(--g-color-base-misc-light);
+  --yfm-color-code-hovered-background: var(--g-color-base-misc-medium);
 }
 
 /* По умолчанию diplodoc даёт .yfm code { font-size: 0.875em } — это правило бьёт
