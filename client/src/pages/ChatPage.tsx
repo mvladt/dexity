@@ -8,10 +8,11 @@ import { ChatStream } from '../components/ChatStream';
 import { ChatComposer } from '../components/ChatComposer';
 
 const SUGGESTIONS: Suggestion[] = [
-  { title: 'Объясни концепцию простыми словами', id: '1' },
-  { title: 'Напиши краткое эссе на тему', id: '2' },
-  { title: 'Помоги с кодом', id: '3' },
-  { title: 'Переведи текст', id: '4' },
+  { title: 'Найди новости ИИ за вчера', id: '1' },
+  { title: 'Новости компании Яндекс за вчера', id: '2' },
+  { title: 'Что такое RAG?', id: '3' },
+  { title: 'Напиши "Hello World" на Rust', id: '4' },
+  { title: 'Сделай большой роадмап по изучению DevOps', id: '5' },
 ];
 
 export function ChatPage() {
