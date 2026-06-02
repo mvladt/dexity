@@ -29,7 +29,16 @@ const MAX_BYTES = 2 * 1024 * 1024;
 const TIMEOUT_MS = 5_000;
 const MAX_REDIRECTS = 5;
 const CONTENT_MAX = 15_000;
+// Меньше этого порога текст бесполезен для модели (капча, пустая SPA,
+// paywall-превью, заглушка). Лучше честная ошибка, чем мусор под success.
+const CONTENT_MIN = 200;
 const USER_AGENT = 'Mozilla/5.0 (compatible; Dexity/1.0)';
+
+/** Финальный URL после редиректов указывает на страницу капчи. */
+function isCaptchaUrl(url: string): boolean {
+  const u = url.toLowerCase();
+  return u.includes('showcaptcha') || u.includes('/captcha') || u.includes('smartcaptcha');
+}
 
 // ─── SSRF-защита ────────────────────────────────────────────────────────────
 
@@ -220,6 +229,15 @@ export async function fetchUrl(url: string, signal?: AbortSignal): Promise<Fetch
     break;
   }
 
+  // Капча определяется по финальному URL до парсинга: не тратим Readability
+  // на заведомо мусорную страницу и даём модели точную причину.
+  if (isCaptchaUrl(currentUrl)) {
+    throw new Error(
+      `Источник защищён капчей (${new URL(currentUrl).hostname}), страница недоступна. ` +
+        'Не повторяй запрос к этому URL — возьми другой источник.',
+    );
+  }
+
   // Проверка Content-Type
   const ct = response.headers.get('content-type');
   if (!ct) throw new Error('Ответ без Content-Type');
@@ -263,6 +281,16 @@ export async function fetchUrl(url: string, signal?: AbortSignal): Promise<Fetch
 
   // Нормализация: убираем тройные+ переводы строк
   let content = article.textContent.trim().replace(/\n{3,}/g, '\n\n');
+
+  // Слишком мало текста — источник бесполезен (капча без отдельного URL,
+  // пустая SPA, заглушка). Честная ошибка вместо мусора под success.
+  if (content.length < CONTENT_MIN) {
+    throw new Error(
+      `Со страницы извлечено слишком мало текста (${content.length} симв.) — ` +
+        'источник недоступен или защищён. Не повторяй запрос — возьми другой источник.',
+    );
+  }
+
   if (content.length > CONTENT_MAX) {
     content = content.slice(0, CONTENT_MAX) + '\n…[обрезано]';
   }
