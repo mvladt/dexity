@@ -437,7 +437,7 @@ body,
   font-family: var(--g-font-family-sans);
   font-size: 13px;
   line-height: 1.5;
-  color: var(--g-color-text-secondary);
+  color: var(--g-color-text-complementary);
 }
 
 .chat-empty {
