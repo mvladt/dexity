@@ -56,10 +56,16 @@ function buildFetchPart(tool: FetchToolState) {
     toolIcon: <Icon data={Globe} size={16} />,
   };
   // Показываем домен (полный URL бывает длинным — captcha, query-параметры).
-  // На success домен кликабелен и ведёт на точную страницу. Статус рисует ToolMessage.
+  // Домен всегда кликабелен и ведёт на точную страницу — на неудачном fetch это
+  // даже нужнее: можно глазами проверить, что там не загрузилось. Статус рисует ToolMessage.
   const host = hostOf(tool.url);
+  const link = (
+    <a className="dx-fetch-link" href={tool.url} target="_blank" rel="noopener noreferrer">
+      {host}
+    </a>
+  );
   if (tool.status !== 'success') {
-    return { type: 'tool' as const, data: { ...base, status: tool.status, headerContent: host } };
+    return { type: 'tool' as const, data: { ...base, status: tool.status, headerContent: link } };
   }
   // На success рядом с доменом — длина извлечённого текста. Короткое число =
   // сигнал мусора (капча/заглушка), даже под зелёной галочкой. Тело — сам текст,
@@ -68,9 +74,7 @@ function buildFetchPart(tool: FetchToolState) {
   const len = content.length;
   const headerContent = (
     <span className="dx-fetch-header">
-      <a className="dx-fetch-link" href={tool.url} target="_blank" rel="noopener noreferrer">
-        {host}
-      </a>
+      {link}
       <span className="dx-fetch-len">· {len.toLocaleString('ru-RU')} симв.</span>
     </span>
   );
