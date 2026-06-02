@@ -26,7 +26,7 @@ export const webFetchTool: ChatCompletionTool = {
 };
 
 const MAX_BYTES = 2 * 1024 * 1024;
-const TIMEOUT_MS = 10_000;
+const TIMEOUT_MS = 5_000;
 const MAX_REDIRECTS = 5;
 const CONTENT_MAX = 15_000;
 const USER_AGENT = 'Mozilla/5.0 (compatible; Dexity/1.0)';
