@@ -39,6 +39,7 @@ export async function streamMessages(
       },
       body: JSON.stringify({
         content,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         ...(callbacks.model ? { model: callbacks.model } : {}),
         ...(callbacks.systemPrompt ? { systemPrompt: callbacks.systemPrompt } : {}),
         ...(callbacks.webSearch ? { webSearch: true } : {}),

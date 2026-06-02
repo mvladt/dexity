@@ -207,8 +207,16 @@ export const messages = sqliteTable(
 **POST `/api/chats/:chatId/messages/stream` Request:**
 
 ```json
-{ "content": "string" }
+{
+  "content": "string",
+  "model": "string?",
+  "systemPrompt": "string?",
+  "webSearch": "boolean?",
+  "timeZone": "string?"
+}
 ```
+
+`timeZone` — IANA-зона браузера (`Intl.DateTimeFormat().resolvedOptions().timeZone`). Бэк всегда добавляет в `messages[]` первым **базовый системный блок** с текущей датой/временем: часы серверные (`new Date()`), формат — в присланной TZ (фоллбэк `Europe/Moscow` при отсутствии/невалидной зоне). Пользовательский `systemPrompt` идёт отдельным `system`-сообщением после него.
 
 **Response headers:**
 
@@ -270,7 +278,7 @@ HTTP 404: { "error": "Chat not found" }
 | `:chatId` (все маршруты)        | `z.coerce.number().int().positive()`                         |
 | `POST /api/chats` body          | `z.object({ title: z.string().min(1).max(200).optional() })` |
 | `PATCH /api/chats/:chatId` body | `z.object({ title: z.string().min(1).max(200) })`            |
-| `POST …/messages/stream` body   | `z.object({ content: z.string().min(1).max(10_000) })`       |
+| `POST …/messages/stream` body   | `{ content: 1..10_000, model?, systemPrompt?: ..4000, webSearch?, timeZone?: ..64 }` |
 | `POST /api/auth/verify` body    | `z.object({ token: z.string().min(1) })`                     |
 
 Fastify `bodyLimit: 102_400` (100 KB).

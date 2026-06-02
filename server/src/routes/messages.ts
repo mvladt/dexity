@@ -23,7 +23,30 @@ const streamBodySchema = z.object({
   model: z.string().optional(),
   systemPrompt: z.string().max(4000).optional(),
   webSearch: z.boolean().optional(),
+  timeZone: z.string().max(64).optional(),
 });
+
+function isValidTimeZone(tz?: string): boolean {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Базовый системный блок: модель не знает текущую дату/время.
+// TZ приходит с клиента (реальный пояс пользователя), часы — серверные.
+function buildBaseSystem(timeZone?: string): string {
+  const tz = isValidTimeZone(timeZone) ? timeZone! : 'Europe/Moscow';
+  const now = new Intl.DateTimeFormat('ru-RU', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: tz,
+  }).format(new Date());
+  return `Текущая дата и время: ${now} (${tz}).`;
+}
 
 function writeSSE(reply: { raw: { write: (s: string) => void } }, data: object) {
   reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -68,6 +91,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const modelOverride = bodyResult.data.model;
     const systemPrompt = bodyResult.data.systemPrompt?.trim() || undefined;
     const webSearchEnabled = bodyResult.data.webSearch === true;
+    const timeZone = bodyResult.data.timeZone;
 
     const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
     if (!chat) return reply.status(404).send({ error: 'Chat not found' });
@@ -128,6 +152,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
     try {
       const llmMessages: ChatCompletionMessageParam[] = [
+        { role: 'system' as const, content: buildBaseSystem(timeZone) },
         ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
         { role: 'user' as const, content: userContent },
