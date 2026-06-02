@@ -276,8 +276,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
               try {
                 const res = await p;
-                partsLog.push({ type: 'fetch', url: res.url, title: res.title });
-                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'success', callId, url: res.url, title: res.title } });
+                partsLog.push({ type: 'fetch', url: res.url, title: res.title, content: res.content });
+                writeSSE(reply, { type: 'tool', tool: { name: 'fetch', status: 'success', callId, url: res.url, title: res.title, content: res.content } });
                 return { tcId: tc.id, content: { url: res.url, title: res.title, content: res.content } };
               } catch (err) {
                 if (abort.signal.aborted) return { tcId: tc.id, content: { error: 'aborted' } };

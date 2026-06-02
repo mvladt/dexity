@@ -58,17 +58,31 @@ function buildFetchPart(tool: FetchToolState) {
   // Показываем домен (полный URL бывает длинным — captcha, query-параметры).
   // На success домен кликабелен и ведёт на точную страницу. Статус рисует ToolMessage.
   const host = hostOf(tool.url);
-  const headerContent =
-    tool.status === 'success' ? (
+  if (tool.status !== 'success') {
+    return { type: 'tool' as const, data: { ...base, status: tool.status, headerContent: host } };
+  }
+  // На success рядом с доменом — длина извлечённого текста. Короткое число =
+  // сигнал мусора (капча/заглушка), даже под зелёной галочкой. Тело — сам текст,
+  // ровно то, что ушло в LLM: можно развернуть и проверить, что прочитала модель.
+  const content = tool.content ?? '';
+  const len = content.length;
+  const headerContent = (
+    <span className="dx-fetch-header">
       <a className="dx-fetch-link" href={tool.url} target="_blank" rel="noopener noreferrer">
         {host}
       </a>
-    ) : (
-      host
-    );
+      <span className="dx-fetch-len">· {len.toLocaleString('ru-RU')} симв.</span>
+    </span>
+  );
   return {
     type: 'tool' as const,
-    data: { ...base, status: tool.status, headerContent },
+    data: {
+      ...base,
+      status: tool.status,
+      headerContent,
+      bodyContent: content ? <pre className="dx-fetch-content">{content}</pre> : null,
+      autoCollapseOnSuccess: true,
+    },
   };
 }
 
@@ -166,7 +180,7 @@ function toAikitMessage(msg: Message): TChatMessage {
             buildFetchPart(
               p.error
                 ? { kind: 'fetch', status: 'error', url: p.url }
-                : { kind: 'fetch', status: 'success', url: p.url, title: p.title },
+                : { kind: 'fetch', status: 'success', url: p.url, title: p.title, content: p.content },
             ),
           );
         else parts.push(buildToolPart({ kind: 'web', status: 'success', query: p.query ?? '', sources: p.sources }));

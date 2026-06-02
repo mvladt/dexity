@@ -405,6 +405,13 @@ body,
 
 /* ── Fetch: URL прочитанной страницы ─────────────────────────── */
 
+.dx-fetch-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
 .dx-fetch-link {
   color: var(--g-color-text-complementary);
   text-decoration: none;
@@ -412,6 +419,25 @@ body,
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+.dx-fetch-len {
+  color: var(--g-color-text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* Извлечённый текст страницы — то, что реально прочитала модель. */
+.dx-fetch-content {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--g-font-family-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--g-color-text-secondary);
 }
 
 .chat-empty {
