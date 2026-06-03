@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
   BaseMessageAction,
@@ -343,9 +343,23 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     status: chatStatus,
   });
 
+  // Композер «плавает» над лентой (position: absolute) — его высота меняется,
+  // когда textarea растёт под длинный ввод. Снимаем реальную высоту через
+  // ResizeObserver и резервируем ровно столько padding-bottom у ленты, чтобы
+  // последнее сообщение не уезжало под поле даже на большой простыне.
+  const inputRef = useRef<HTMLDivElement>(null);
+  const [composerH, setComposerH] = useState(0);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setComposerH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="chat-content">
-      <div className="chat-messages" ref={containerRef}>
+      <div className="chat-messages" ref={containerRef} style={{ paddingBottom: composerH + 8 }}>
         <MessageList
           messages={displayMessages}
           status={chatStatus}
@@ -358,7 +372,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           }
         />
       </div>
-      <div className="chat-input">
+      <div className="chat-input" ref={inputRef}>
         <ChatComposer
           onSend={handleSend}
           onCancel={async () => cancel()}
