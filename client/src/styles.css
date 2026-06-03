@@ -521,6 +521,19 @@ body,
   padding: 32px;
 }
 
+.empty-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--g-color-base-brand);
+  color: var(--g-color-text-brand-contrast);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 26px;
+  box-shadow: 0 6px 20px rgba(255, 190, 92, 0.25);
+}
+
 /* ── History page ───────────────────────────────────────── */
 
 .history-page {

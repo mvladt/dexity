@@ -84,9 +84,11 @@ export function ChatPage() {
     <div className="chat-content">
       <div className="chat-empty">
         <EmptyContainer
+          image={<div className="empty-logo">D</div>}
           title="Чем могу помочь?"
           suggestions={SUGGESTIONS}
           onSuggestionClick={handleSuggestion}
+          alignment={{ image: 'center', title: 'center' }}
           layout="grid"
         />
       </div>
