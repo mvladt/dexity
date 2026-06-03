@@ -86,9 +86,10 @@ export function ChatPage() {
         <EmptyContainer
           image={<div className="empty-logo">D</div>}
           title="Чем могу помочь?"
+          description="Dexity — персональный AI-чат на Yandex Cloud · Qwen, DeepSeek и AliceAI"
           suggestions={SUGGESTIONS}
           onSuggestionClick={handleSuggestion}
-          alignment={{ image: 'center', title: 'center' }}
+          alignment={{ image: 'center', title: 'center', description: 'center' }}
           layout="grid"
         />
       </div>

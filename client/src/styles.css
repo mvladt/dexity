@@ -521,6 +521,16 @@ body,
   padding: 32px;
 }
 
+.chat-empty .g-aikit-empty-container__content {
+  justify-content: center;
+}
+
+.chat-empty .g-aikit-suggestions {
+  justify-content: center;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 .empty-logo {
   width: 56px;
   height: 56px;
