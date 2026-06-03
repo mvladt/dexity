@@ -167,7 +167,7 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
         });
       },
 
-      onDone: (fullContent, assistantMessageId, fullThinking, fullTool, chatTitle) => {
+      onDone: (fullContent, assistantMessageId, fullThinking, fullTool, chatTitle, usage) => {
         appendMessage({
           id: assistantMessageId,
           chatId,
@@ -175,6 +175,8 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
           content: fullContent,
           thinking: fullThinking ?? null,
           toolData: fullTool ?? null,
+          promptTokens: usage?.promptTokens ?? null,
+          completionTokens: usage?.completionTokens ?? null,
           createdAt: new Date().toISOString(),
         });
         if (chatTitle) patchChatTitle(chatId, chatTitle);

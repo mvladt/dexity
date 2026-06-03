@@ -22,6 +22,8 @@ export function migrate(db: Database.Database) {
       content    TEXT    NOT NULL,
       thinking   TEXT,
       tool_data  TEXT,
+      prompt_tokens     INTEGER,
+      completion_tokens INTEGER,
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
@@ -37,4 +39,6 @@ export function migrate(db: Database.Database) {
   const names = new Set(cols.map((c) => c.name));
   if (!names.has('thinking')) db.exec(`ALTER TABLE messages ADD COLUMN thinking TEXT`);
   if (!names.has('tool_data')) db.exec(`ALTER TABLE messages ADD COLUMN tool_data TEXT`);
+  if (!names.has('prompt_tokens')) db.exec(`ALTER TABLE messages ADD COLUMN prompt_tokens INTEGER`);
+  if (!names.has('completion_tokens')) db.exec(`ALTER TABLE messages ADD COLUMN completion_tokens INTEGER`);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
+import { ContextItem, MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
   TAssistantMessage,
   TAssistantMessageContent,
@@ -206,6 +206,7 @@ function toAikitMessage(msg: Message): TChatMessage {
       id: String(msg.id),
       timestamp: msg.createdAt,
       content: parts,
+      metadata: { promptTokens: msg.promptTokens, completionTokens: msg.completionTokens },
     };
   }
   return {
@@ -224,6 +225,16 @@ const assistantActions = [
     },
   },
 ];
+
+// Реальный расход токенов под ответом: ↑prompt ↓completion. Берём из metadata,
+// которую кладёт toAikitMessage. Нет данных (частичный ответ / стрим) — не рисуем.
+function TokenInfo({ message }: { message: TAssistantMessage }) {
+  const meta = message.metadata as
+    | { promptTokens?: number | null; completionTokens?: number | null }
+    | undefined;
+  if (meta?.promptTokens == null || meta?.completionTokens == null) return null;
+  return <ContextItem content={`↑${meta.promptTokens} ↓${meta.completionTokens}`} />;
+}
 
 // Бэк льёт в LLM только последние 20 сообщений.
 const HISTORY_WINDOW = 20;
@@ -298,6 +309,15 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     .slice(-HISTORY_WINDOW)
     .reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
+  // Суммарный реальный расход по чату — сумма usage всех ответов ассистента.
+  const totalUsage = messages.reduce(
+    (acc, m) => ({
+      prompt: acc.prompt + (m.promptTokens ?? 0),
+      completion: acc.completion + (m.completionTokens ?? 0),
+    }),
+    { prompt: 0, completion: 0 },
+  );
+
   const handleSend = async (data: TSubmitData) => {
     if (!data.content.trim() || streaming) return;
     onUserMessage(data.content);
@@ -320,6 +340,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           showTimestamp
           showActionsOnHover
           assistantActions={assistantActions}
+          assistantExtraInfo={TokenInfo}
           errorMessage={
             error ? { text: error.message, variant: 'error' as const } : undefined
           }
@@ -332,6 +353,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           status={streaming ? 'streaming' : 'ready'}
           usedTokens={usedTokens}
           maxContext={maxContext}
+          totalUsage={totalUsage}
         />
       </div>
     </div>

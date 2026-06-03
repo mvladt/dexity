@@ -357,6 +357,13 @@ body,
   min-width: 0;
 }
 
+.chat-composer-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 /* ── Sources list внутри ToolMessage bodyContent ─────────────── */
 
 .dx-sources-list {

@@ -25,6 +25,8 @@ export const messages = sqliteTable(
     content: text('content').notNull(),
     thinking: text('thinking'),
     toolData: text('tool_data'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
     createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
   },
   (t) => ({

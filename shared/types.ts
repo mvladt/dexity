@@ -40,6 +40,10 @@ export interface Message {
   content: string;
   thinking?: string | null;
   toolData?: MessageToolData | null;
+  // Реальный расход токенов от LLM (только assistant). null — ответ частичный
+  // или модель не вернула usage.
+  promptTokens?: number | null;
+  completionTokens?: number | null;
   createdAt: string;
 }
 
@@ -70,5 +74,7 @@ export type SSEEvent =
       fullTool?: MessageToolData;
       assistantMessageId: number;
       chatTitle?: string;
+      // Суммарный usage по всем раундам ответа (если LLM его вернула).
+      usage?: { promptTokens: number; completionTokens: number };
     }
   | { type: 'error'; code: 'auth' | 'quota' | 'server'; message: string };

@@ -141,6 +141,13 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     let sourcePosition = 1;
     let callIdSeq = 0;
 
+    // Реальный usage от LLM, суммарно по всем раундам (tool-вызовы — это
+    // отдельные запросы к модели, каждый со своим usage). hasUsage остаётся
+    // false, если модель не вернула usage — тогда в БД пишем null.
+    let promptTokens = 0;
+    let completionTokens = 0;
+    let hasUsage = false;
+
     // Дедупликация fetch-запросов и soft cap в рамках одного ответа
     const fetchCache = new Map<string, Promise<FetchResult>>();
     let fetchCount = 0;
@@ -173,6 +180,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           content: fullContent,
           thinking: fullThinking || null,
           toolData: toolData ? JSON.stringify(toolData) : null,
+          promptTokens: hasUsage ? promptTokens : null,
+          completionTokens: hasUsage ? completionTokens : null,
         })
         .returning();
 
@@ -229,6 +238,13 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         const accToolCalls: Map<number, AccToolCall> = new Map();
 
         for await (const chunk of stream) {
+          // Финальный чанк раунда несёт usage с пустым choices.
+          if (chunk.usage) {
+            promptTokens += chunk.usage.prompt_tokens ?? 0;
+            completionTokens += chunk.usage.completion_tokens ?? 0;
+            hasUsage = true;
+          }
+
           const delta = chunk.choices[0]?.delta ?? {};
 
           const reasoning = (delta as { reasoning_content?: string }).reasoning_content;
@@ -405,6 +421,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
           ...(fullThinking ? { fullThinking } : {}),
           ...(result.toolData ? { fullTool: result.toolData } : {}),
           ...(result.chatTitle ? { chatTitle: result.chatTitle } : {}),
+          ...(hasUsage ? { usage: { promptTokens, completionTokens } } : {}),
         });
       }
     } catch (err: unknown) {

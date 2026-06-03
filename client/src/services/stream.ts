@@ -13,6 +13,7 @@ interface StreamCallbacks {
     fullThinking?: string,
     fullTool?: MessageToolData,
     chatTitle?: string,
+    usage?: { promptTokens: number; completionTokens: number },
   ) => void;
   onError: (code: 'auth' | 'quota' | 'server', message: string) => void;
   signal?: AbortSignal;
@@ -100,6 +101,7 @@ export async function streamMessages(
               event.fullThinking,
               event.fullTool,
               event.chatTitle,
+              event.usage,
             );
           } else if (event.type === 'error') {
             callbacks.onError(event.code, event.message);

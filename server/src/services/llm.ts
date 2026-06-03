@@ -23,6 +23,9 @@ export async function streamChat(
       model: fullModel,
       messages,
       stream: true,
+      // Просим API вернуть реальный usage (prompt/completion tokens) — приходит
+      // в финальном чанке стрима с пустым choices.
+      stream_options: { include_usage: true },
       ...(tools ? { tools, tool_choice: toolChoice ?? 'auto' } : {}),
     },
     { signal },

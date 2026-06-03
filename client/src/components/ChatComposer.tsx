@@ -1,4 +1,4 @@
-import { ContextIndicator, PromptInput } from '@gravity-ui/aikit';
+import { ContextIndicator, ContextItem, PromptInput } from '@gravity-ui/aikit';
 import type { TSubmitData } from '@gravity-ui/aikit';
 import type { ChatStatus } from '@gravity-ui/aikit';
 import { Select } from '@gravity-ui/uikit';
@@ -11,14 +11,16 @@ interface Props {
   status?: ChatStatus;
   usedTokens?: number;
   maxContext?: number;
+  totalUsage?: { prompt: number; completion: number };
   placeholder?: string;
 }
 
-export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext, placeholder }: Props) {
+export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext, totalUsage, placeholder }: Props) {
   const model = useSettingsStore((s) => s.model);
   const setModel = useSettingsStore((s) => s.setModel);
 
   const showContextIndicator = usedTokens !== undefined && maxContext !== undefined;
+  const showTotalUsage = totalUsage !== undefined && totalUsage.prompt + totalUsage.completion > 0;
 
   const bottomContent = (
     <div className="chat-composer-footer">
@@ -40,15 +42,24 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
       status={status}
       bodyProps={{ placeholder: placeholder ?? 'Напишите сообщение…' }}
       headerProps={
-        showContextIndicator
+        showContextIndicator || showTotalUsage
           ? {
               topContent: (
-                <ContextIndicator
-                  type="number"
-                  usedContext={usedTokens}
-                  maxContext={maxContext}
-                  tooltipContent={`Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним 20 сообщениям)`}
-                />
+                <div className="chat-composer-stats">
+                  {showContextIndicator && (
+                    <ContextIndicator
+                      type="number"
+                      usedContext={usedTokens}
+                      maxContext={maxContext}
+                      tooltipContent={`Использовано ~${usedTokens} из ${maxContext} токенов (оценка по последним 20 сообщениям)`}
+                    />
+                  )}
+                  {showTotalUsage && (
+                    <ContextItem
+                      content={`Σ ↑${totalUsage.prompt} ↓${totalUsage.completion}`}
+                    />
+                  )}
+                </div>
               ),
             }
           : undefined
