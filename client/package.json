@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@gravity-ui/aikit": "~1.17",
+    "@gravity-ui/aikit": "^2",
     "@gravity-ui/uikit": "^7",
     "react": "^18",
     "react-dom": "^18",
