@@ -55,7 +55,7 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
                     />
                   )}
                   {showTotalUsage && (
-                    <Text variant="body-1" color="secondary">
+                    <Text className="dx-tokens" color="secondary">
                       ↑{totalUsage.prompt} ↓{totalUsage.completion}
                     </Text>
                   )}

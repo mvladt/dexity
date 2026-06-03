@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
   BaseMessageAction,
+  TAssistantMessage,
   TAssistantMessageContent,
   TChatMessage,
   TSubmitData,
@@ -207,6 +208,7 @@ function toAikitMessage(msg: Message): TChatMessage {
       timestamp: msg.createdAt,
       content: parts,
       actions: buildAssistantActions(msg),
+      metadata: { promptTokens: msg.promptTokens, completionTokens: msg.completionTokens },
     };
   }
   return {
@@ -214,26 +216,34 @@ function toAikitMessage(msg: Message): TChatMessage {
     content: msg.content,
     id: String(msg.id),
     timestamp: msg.createdAt,
-    ...(msg.role === 'assistant' ? { actions: buildAssistantActions(msg) } : {}),
+    ...(msg.role === 'assistant'
+      ? {
+          actions: buildAssistantActions(msg),
+          metadata: { promptTokens: msg.promptTokens, completionTokens: msg.completionTokens },
+        }
+      : {}),
   };
 }
 
-// Экшены ответа ассистента: копирование + (если есть) реальный расход токенов
-// «↑prompt ↓completion». Токены — последним элементом массива: в футере
-// BaseMessage он раскладывается как [копия … токены][время], то есть токены
-// встают между кнопкой копии и временем.
+// Экшены ответа ассистента: только копирование. Токены идут отдельным слотом
+// extraInfo (см. TokenInfo), чтобы CSS мог прижать их в правый угол футера.
 function buildAssistantActions(msg: Message): BaseMessageAction[] {
-  const actions: BaseMessageAction[] = [
-    { actionType: 'copy', onClick: () => navigator.clipboard.writeText(msg.content) },
-  ];
-  if (msg.promptTokens != null && msg.completionTokens != null) {
-    actions.push(
-      <Text key="tokens" variant="body-1" color="secondary">
-        ↑{msg.promptTokens} ↓{msg.completionTokens}
-      </Text>,
-    );
-  }
-  return actions;
+  return [{ actionType: 'copy', onClick: () => navigator.clipboard.writeText(msg.content) }];
+}
+
+// Реальный расход токенов «↑prompt ↓completion» — рендерится в правом углу
+// футера сообщения (через MessageList.assistantExtraInfo). Размер — gravity-токен
+// (.dx-tokens). Нет данных (частичный ответ) — не рисуем.
+function TokenInfo({ message }: { message: TAssistantMessage }) {
+  const meta = message.metadata as
+    | { promptTokens?: number | null; completionTokens?: number | null }
+    | undefined;
+  if (meta?.promptTokens == null || meta?.completionTokens == null) return null;
+  return (
+    <Text className="dx-tokens" color="secondary">
+      ↑{meta.promptTokens} ↓{meta.completionTokens}
+    </Text>
+  );
 }
 
 // Бэк льёт в LLM только последние 20 сообщений.
@@ -338,6 +348,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           status={chatStatus}
           shouldParseIncompleteMarkdown={streaming}
           showTimestamp
+          assistantExtraInfo={TokenInfo}
           errorMessage={
             error ? { text: error.message, variant: 'error' as const } : undefined
           }

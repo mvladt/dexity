@@ -362,6 +362,34 @@ body,
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  width: 100%;
+}
+
+/* Размер цифр токенов — gravity-токен 13px (без хардкода). */
+.dx-tokens {
+  font-size: var(--g-text-subheader-1-font-size);
+  line-height: var(--g-text-subheader-1-line-height);
+}
+
+/* Итог в шапке композера — в правый угол. */
+.chat-composer-stats .dx-tokens {
+  margin-inline-start: auto;
+}
+
+/* Токены под ответом — в правый угол футера. Растягиваем строку действий на
+   всю ширину, копию ставим первой, время — за ней, токены прижимаем вправо.
+   Только для ответов ассистента, чтобы не трогать выравнивание user-сообщений. */
+.chat-messages .g-aikit-base-message_variant_assistant .g-aikit-base-message__actions {
+  width: 100%;
+  flex-direction: row;
+}
+
+.chat-messages .g-aikit-base-message_variant_assistant .g-aikit-base-message__actions > .g-aikit-button-group {
+  order: -1;
+}
+
+.chat-messages .g-aikit-base-message_variant_assistant .g-aikit-base-message__actions > .dx-tokens {
+  margin-inline-start: auto;
 }
 
 /* ── Sources list внутри ToolMessage bodyContent ─────────────── */
