@@ -150,6 +150,50 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     // без настоящего вызова и без текста. Один раз принудительно дожимаем ответ.
     let forcedAnswer = false;
 
+    // Сохранение ответа ассистента. Вызывается и на нормальном завершении, и из
+    // finally при паузе (соединение закрылось до конца) — тогда в историю
+    // попадает то, что успели сгенерировать. Флаг `saved` страхует от двойной записи.
+    let saved = false;
+    async function persistAssistant(): Promise<
+      { id: number; toolData: MessageToolData | null; chatTitle?: string } | null
+    > {
+      const hasTools = partsLog.some((p) => p.type === 'tool' || p.type === 'fetch');
+      // Нечего сохранять: пауза до того, как пошёл текст или инструменты.
+      if (fullContent.trim() === '' && !hasTools) return null;
+
+      const toolData: MessageToolData | null = hasTools
+        ? { sources: allSources, calls: callsSources, parts: partsLog }
+        : null;
+
+      const [assistantMsg] = await db
+        .insert(messages)
+        .values({
+          chatId,
+          role: 'assistant',
+          content: fullContent,
+          thinking: fullThinking || null,
+          toolData: toolData ? JSON.stringify(toolData) : null,
+        })
+        .returning();
+
+      await db
+        .update(chats)
+        .set({ updatedAt: sql`(datetime('now'))` })
+        .where(eq(chats.id, chatId));
+
+      let chatTitle: string | undefined;
+      if (userMessagesBefore === 0) {
+        chatTitle = buildTitle(userContent);
+        await db
+          .update(chats)
+          .set({ title: chatTitle, updatedAt: sql`(datetime('now'))` })
+          .where(eq(chats.id, chatId));
+      }
+
+      saved = true;
+      return { id: assistantMsg.id, toolData, chatTitle };
+    }
+
     try {
       const llmMessages: ChatCompletionMessageParam[] = [
         { role: 'system' as const, content: buildBaseSystem(timeZone) },
@@ -352,44 +396,17 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
 
       // Сохраняем toolData при любой tool-активности, не только при наличии источников:
       // fetch-парты тоже должны воспроизводиться после reload.
-      const hasTools = partsLog.some((p) => p.type === 'tool' || p.type === 'fetch');
-      const toolData: MessageToolData | null = hasTools
-        ? { sources: allSources, calls: callsSources, parts: partsLog }
-        : null;
-
-      const [assistantMsg] = await db
-        .insert(messages)
-        .values({
-          chatId,
-          role: 'assistant',
-          content: fullContent,
-          thinking: fullThinking || null,
-          toolData: toolData ? JSON.stringify(toolData) : null,
-        })
-        .returning();
-
-      await db
-        .update(chats)
-        .set({ updatedAt: sql`(datetime('now'))` })
-        .where(eq(chats.id, chatId));
-
-      let chatTitle: string | undefined;
-      if (userMessagesBefore === 0) {
-        chatTitle = buildTitle(userContent);
-        await db
-          .update(chats)
-          .set({ title: chatTitle, updatedAt: sql`(datetime('now'))` })
-          .where(eq(chats.id, chatId));
+      const result = await persistAssistant();
+      if (result) {
+        writeSSE(reply, {
+          type: 'done',
+          fullContent,
+          assistantMessageId: result.id,
+          ...(fullThinking ? { fullThinking } : {}),
+          ...(result.toolData ? { fullTool: result.toolData } : {}),
+          ...(result.chatTitle ? { chatTitle: result.chatTitle } : {}),
+        });
       }
-
-      writeSSE(reply, {
-        type: 'done',
-        fullContent,
-        assistantMessageId: assistantMsg.id,
-        ...(fullThinking ? { fullThinking } : {}),
-        ...(toolData ? { fullTool: toolData } : {}),
-        ...(chatTitle ? { chatTitle } : {}),
-      });
     } catch (err: unknown) {
       if (abort.signal.aborted) {
         return;
@@ -422,6 +439,15 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       }
     } finally {
       clearInterval(pingInterval);
+      // Пауза: соединение закрылось до завершения. Сохраняем то, что успели
+      // сгенерировать, чтобы недописанный ответ остался в истории.
+      if (abort.signal.aborted && !saved) {
+        try {
+          await persistAssistant();
+        } catch (err) {
+          request.log.error({ err }, 'Failed to persist partial answer on abort');
+        }
+      }
       if (!reply.raw.writableEnded) reply.raw.end();
     }
   });

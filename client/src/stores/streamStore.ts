@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { streamMessages } from '../services/stream';
 import { useChatStore } from './chatStore';
 import { useSettingsStore } from './settingsStore';
-import type { Source, SSEEvent } from '../types';
+import type { MessageToolData, PartSnapshot, Source, SSEEvent } from '../types';
 
 export type ToolState =
   | { kind: 'web'; status: 'loading'; query: string }
@@ -30,7 +30,41 @@ let abortController: AbortController | null = null;
 
 const INITIAL = { parts: [] as StreamPart[] };
 
-export const useStreamStore = create<StreamStore>()((set) => ({
+// Сворачивает live-парты стрима в формат сохранённого сообщения. Нужно при
+// паузе: фиксируем недописанный ответ локально (сервер пишет свою версию в БД,
+// она заменит локальную при следующем fetchMessages).
+function partsToStored(parts: StreamPart[]): {
+  content: string;
+  thinking: string;
+  toolData: MessageToolData | null;
+} {
+  let content = '';
+  let thinking = '';
+  const snapshot: PartSnapshot[] = [];
+  for (const p of parts) {
+    if (p.type === 'text') {
+      content += p.content;
+    } else if (p.type === 'thinking') {
+      thinking += p.content;
+      snapshot.push({ type: 'thinking', content: p.content });
+    } else if (p.state.kind === 'fetch') {
+      const st = p.state;
+      snapshot.push(
+        st.status === 'success'
+          ? { type: 'fetch', url: st.url, title: st.title, content: st.content }
+          : st.status === 'error'
+            ? { type: 'fetch', url: st.url, error: true }
+            : { type: 'fetch', url: st.url },
+      );
+    } else {
+      const st = p.state;
+      snapshot.push({ type: 'tool', query: st.query, sources: st.status === 'success' ? st.sources : [] });
+    }
+  }
+  return { content, thinking, toolData: snapshot.length ? { parts: snapshot } : null };
+}
+
+export const useStreamStore = create<StreamStore>()((set, get) => ({
   streaming: false,
   ...INITIAL,
   error: null,
@@ -40,6 +74,27 @@ export const useStreamStore = create<StreamStore>()((set) => ({
   cancel: () => {
     abortController?.abort();
     abortController = null;
+
+    // Фиксируем недописанный ответ локально, чтобы он не пропал с экрана.
+    // Временный id примирится с серверной версией при следующем fetchMessages.
+    const chatId = useChatStore.getState().activeChat?.id;
+    const { content, thinking, toolData } = partsToStored(get().parts);
+    // Порог совпадает с серверным persistAssistant: сохраняем при наличии текста
+    // или инструментов. Только thinking (без ответа) не фиксируем — иначе пузырь
+    // исчезнет после refetch, т.к. сервер его не сохранит.
+    const hasTool = toolData?.parts?.some((p) => p.type === 'tool' || p.type === 'fetch') ?? false;
+    if (chatId && (content.trim() !== '' || hasTool)) {
+      useChatStore.getState().appendMessage({
+        id: Date.now(),
+        chatId,
+        role: 'assistant',
+        content,
+        thinking: thinking || null,
+        toolData,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
     set({ streaming: false, ...INITIAL });
   },
 

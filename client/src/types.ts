@@ -1,1 +1,1 @@
-export type { Chat, Message, MessageToolData, Source, SSEEvent } from '@shared/types';
+export type { Chat, Message, MessageToolData, PartSnapshot, Source, SSEEvent } from '@shared/types';
