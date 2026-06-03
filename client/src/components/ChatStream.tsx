@@ -283,6 +283,9 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
             role: 'assistant' as const,
             content: streamingParts,
             id: '__streaming__',
+            // Валидный timestamp, иначе aikit (showTimestamp) рендерит
+            // «Input date is invalid». Футер всё равно скрыт до hover.
+            timestamp: new Date().toISOString(),
           },
         ]
       : []),
@@ -347,6 +350,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           messages={displayMessages}
           status={chatStatus}
           shouldParseIncompleteMarkdown={streaming}
+          showActionsOnHover
           showTimestamp
           assistantExtraInfo={TokenInfo}
           errorMessage={
