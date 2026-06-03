@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ContextItem, MessageList, useSmartScroll } from '@gravity-ui/aikit';
+import { MessageList, useSmartScroll } from '@gravity-ui/aikit';
 import type {
-  TAssistantMessage,
+  BaseMessageAction,
   TAssistantMessageContent,
   TChatMessage,
   TSubmitData,
 } from '@gravity-ui/aikit';
 import { Globe, Magnifier } from '@gravity-ui/icons';
-import { Icon } from '@gravity-ui/uikit';
+import { Icon, Text } from '@gravity-ui/uikit';
 import { useChatStore } from '../stores/chatStore';
 import { useStreamStore, type StreamPart, type ToolState } from '../stores/streamStore';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -206,7 +206,7 @@ function toAikitMessage(msg: Message): TChatMessage {
       id: String(msg.id),
       timestamp: msg.createdAt,
       content: parts,
-      metadata: { promptTokens: msg.promptTokens, completionTokens: msg.completionTokens },
+      actions: buildAssistantActions(msg),
     };
   }
   return {
@@ -214,26 +214,26 @@ function toAikitMessage(msg: Message): TChatMessage {
     content: msg.content,
     id: String(msg.id),
     timestamp: msg.createdAt,
+    ...(msg.role === 'assistant' ? { actions: buildAssistantActions(msg) } : {}),
   };
 }
 
-const assistantActions = [
-  {
-    type: 'copy',
-    onClick: (msg: TAssistantMessage) => {
-      if (typeof msg.content === 'string') navigator.clipboard.writeText(msg.content);
-    },
-  },
-];
-
-// Реальный расход токенов под ответом: ↑prompt ↓completion. Берём из metadata,
-// которую кладёт toAikitMessage. Нет данных (частичный ответ / стрим) — не рисуем.
-function TokenInfo({ message }: { message: TAssistantMessage }) {
-  const meta = message.metadata as
-    | { promptTokens?: number | null; completionTokens?: number | null }
-    | undefined;
-  if (meta?.promptTokens == null || meta?.completionTokens == null) return null;
-  return <ContextItem content={`↑${meta.promptTokens} ↓${meta.completionTokens}`} />;
+// Экшены ответа ассистента: копирование + (если есть) реальный расход токенов
+// «↑prompt ↓completion». Токены — последним элементом массива: в футере
+// BaseMessage он раскладывается как [копия … токены][время], то есть токены
+// встают между кнопкой копии и временем.
+function buildAssistantActions(msg: Message): BaseMessageAction[] {
+  const actions: BaseMessageAction[] = [
+    { actionType: 'copy', onClick: () => navigator.clipboard.writeText(msg.content) },
+  ];
+  if (msg.promptTokens != null && msg.completionTokens != null) {
+    actions.push(
+      <Text key="tokens" variant="body-1" color="secondary">
+        ↑{msg.promptTokens} ↓{msg.completionTokens}
+      </Text>,
+    );
+  }
+  return actions;
 }
 
 // Бэк льёт в LLM только последние 20 сообщений.
@@ -338,9 +338,6 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           status={chatStatus}
           shouldParseIncompleteMarkdown={streaming}
           showTimestamp
-          showActionsOnHover
-          assistantActions={assistantActions}
-          assistantExtraInfo={TokenInfo}
           errorMessage={
             error ? { text: error.message, variant: 'error' as const } : undefined
           }

@@ -1,7 +1,7 @@
-import { ContextIndicator, ContextItem, PromptInput } from '@gravity-ui/aikit';
+import { ContextIndicator, PromptInput } from '@gravity-ui/aikit';
 import type { TSubmitData } from '@gravity-ui/aikit';
 import type { ChatStatus } from '@gravity-ui/aikit';
-import { Select } from '@gravity-ui/uikit';
+import { Select, Text } from '@gravity-ui/uikit';
 import { useSettingsStore } from '../stores/settingsStore';
 import { MODELS } from '../models';
 
@@ -55,9 +55,9 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
                     />
                   )}
                   {showTotalUsage && (
-                    <ContextItem
-                      content={`Σ ↑${totalUsage.prompt} ↓${totalUsage.completion}`}
-                    />
+                    <Text variant="body-1" color="secondary">
+                      ↑{totalUsage.prompt} ↓{totalUsage.completion}
+                    </Text>
                   )}
                 </div>
               ),
