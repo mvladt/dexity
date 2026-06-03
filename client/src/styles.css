@@ -363,13 +363,21 @@ body,
 /* Тень — поле «приподнято» над лентой. Цвет sfx-shadow адаптируется под тему;
    на фокусе тень глубже. Рамку поля (border) не трогаем — она своя. */
 .chat-input .g-aikit-prompt-input {
-  box-shadow: 0 2px 8px var(--g-color-sfx-shadow);
+  /* Мягкая многослойная тень как в claude.ai */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.05);
   transition: box-shadow 0.12s ease, border-color 0.12s ease;
 }
 
 .chat-input .g-aikit-prompt-input:focus-within {
-  border-color: var(--g-color-line-generic-accent);
-  box-shadow: 0 3px 12px var(--g-color-sfx-shadow);
+  /* Та же тень + акцентное кольцо бренда */
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 12px 28px rgba(0, 0, 0, 0.05),
+    0 0 0 3px rgba(255, 190, 92, 0.12);
 }
 
 /* PromptInput по умолчанию ловит body-short (13px) от `.g-text-area_size_l .g-text-area__control`.
