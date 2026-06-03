@@ -360,6 +360,18 @@ body,
   padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
 }
 
+/* Тень — поле «приподнято» над лентой. Цвет sfx-shadow адаптируется под тему;
+   на фокусе тень глубже. Рамку поля (border) не трогаем — она своя. */
+.chat-input .g-aikit-prompt-input {
+  box-shadow: 0 4px 16px var(--g-color-sfx-shadow);
+  transition: box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.chat-input .g-aikit-prompt-input:focus-within {
+  border-color: var(--g-color-line-generic-accent);
+  box-shadow: 0 6px 22px var(--g-color-sfx-shadow);
+}
+
 /* PromptInput по умолчанию ловит body-short (13px) от `.g-text-area_size_l .g-text-area__control`.
    Двойной класс выравнивает специфичность (0,2,0) и поднимает текст до body-1 (15px),
    чтобы инпут совпадал по размеру с сообщениями в ленте. */
