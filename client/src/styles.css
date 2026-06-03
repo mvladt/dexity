@@ -336,6 +336,17 @@ body,
   padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
 }
 
+/* Растворяем низ ленты в фоне, чтобы текст не «втыкался» в плавающее поле.
+   Высота = высоте композера (см. ResizeObserver), лежит между лентой и полем. */
+.chat-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, var(--g-color-base-background), transparent);
+}
+
 /* Композер «плавает» над лентой: сообщения скроллятся под ним, фон вокруг поля
    прозрачный (само поле .dx-prompt сохраняет фон base-float). Высота резервируется
    на ленте динамически — см. ResizeObserver в ChatStream. */

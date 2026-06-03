@@ -372,6 +372,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           }
         />
       </div>
+      <div className="chat-fade" style={{ height: composerH + 16 }} />
       <div className="chat-input" ref={inputRef}>
         <ChatComposer
           onSend={handleSend}
