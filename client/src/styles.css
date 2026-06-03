@@ -207,8 +207,24 @@ body,
 }
 
 .app-nav-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px;
   margin-bottom: 8px;
+}
+
+.app-nav-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--g-color-base-brand);
+  color: var(--g-color-text-brand-contrast);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .app-nav-list {

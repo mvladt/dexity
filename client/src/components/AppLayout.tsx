@@ -27,9 +27,10 @@ export function AppLayout() {
 
   const nav = (
     <nav className="app-nav">
-      <Text className="app-nav-title" variant="subheader-2">
-        Dexity
-      </Text>
+      <div className="app-nav-title">
+        <div className="app-nav-logo">D</div>
+        <Text variant="subheader-2">Dexity</Text>
+      </div>
       <ul className="app-nav-list">
         {navItems.map(({ to, label, icon, end }) => (
           <li key={to}>
@@ -77,7 +78,10 @@ export function AppLayout() {
           <Button view="flat" size="s" onClick={() => setMobileOpen(true)}>
             <Bars />
           </Button>
-          <Text variant="subheader-2">Dexity</Text>
+          <div className="app-nav-title">
+            <div className="app-nav-logo">D</div>
+            <Text variant="subheader-2">Dexity</Text>
+          </div>
         </div>
 
         <Outlet />
