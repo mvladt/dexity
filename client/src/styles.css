@@ -800,4 +800,8 @@ body,
     border-bottom: 1px solid var(--g-color-line-generic);
     flex-shrink: 0;
   }
+
+  .chat-empty .g-aikit-empty-container__suggestions-section {
+    display: none;
+  }
 }
