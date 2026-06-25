@@ -337,6 +337,16 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
     await startStream(chatId, data.content);
   };
 
+  // Повтор после ошибки. User-вопрос уже в истории (и локально, и в БД) —
+  // не добавляем его заново, лишь перезапускаем стрим. Бэк распознаёт висячий
+  // вопрос и не дублирует его (см. messages.ts, isRetry).
+  const handleRetry = async () => {
+    if (streaming) return;
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUser) return;
+    await startStream(chatId, lastUser.content);
+  };
+
   const { containerRef } = useSmartScroll<HTMLDivElement>({
     isStreaming: streaming,
     messagesCount: messages.length,
@@ -370,6 +380,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
           errorMessage={
             error ? { text: error.message, variant: 'error' as const } : undefined
           }
+          onRetry={error ? handleRetry : undefined}
         />
       </div>
       <div className="chat-fade" style={{ height: composerH + 16 }} />

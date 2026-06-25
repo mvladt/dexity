@@ -108,12 +108,24 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       history = history.slice(1);
     }
 
-    const userMessagesBefore = history.filter((m) => m.role === 'user').length;
+    // Retry: предыдущая попытка упала, висячий user-вопрос уже лежит в БД
+    // (он попадает в history последним). Повторно не вставляем — иначе в
+    // истории и в контексте LLM окажется два одинаковых вопроса. Заодно это
+    // защищает от случайного двойного сабмита.
+    const last = history.at(-1);
+    const isRetry = last?.role === 'user' && last.content === userContent;
 
-    const [userMsg] = await db
-      .insert(messages)
-      .values({ chatId, role: 'user', content: userContent })
-      .returning();
+    // Для titlegen важно «первое ли это сообщение чата». При retry висячий
+    // user уже учтён в history — исключаем его, иначе титул не сгенерится.
+    const userMessagesBefore =
+      history.filter((m) => m.role === 'user').length - (isRetry ? 1 : 0);
+
+    if (!isRetry) {
+      await db
+        .insert(messages)
+        .values({ chatId, role: 'user', content: userContent })
+        .returning();
+    }
 
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -208,7 +220,8 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         { role: 'system' as const, content: buildBaseSystem(timeZone) },
         ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-        { role: 'user' as const, content: userContent },
+        // При retry висячий вопрос уже последний в history — не дублируем.
+        ...(isRetry ? [] : [{ role: 'user' as const, content: userContent }]),
       ];
 
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
