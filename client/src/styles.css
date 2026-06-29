@@ -409,6 +409,19 @@ body,
   line-height: var(--g-text-body-1-line-height);
 }
 
+/* Таблицы markdown — во всю ширину сообщения. Конфликт стилей библиотек:
+   yfm задаёт `table { display: inline-block }`, aikit — `min-width: 100%`.
+   В сумме рамка тянется на 100%, а содержимое (inline-block) липнет влево,
+   оставляя пустую правую зону. Возвращаем `display: table` + честные 100%,
+   тогда колонки распределяются по ширине. max-width: none — широкая таблица
+   растёт за контейнер и скроллится (overflow-x: auto на .g-aikit-markdown-renderer). */
+.g-aikit-markdown-renderer table {
+  display: table;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
 .chat-composer-footer {
   display: flex;
   align-items: center;
