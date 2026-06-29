@@ -77,7 +77,9 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 2 — Первичная настройка прода (ручная, один раз)
 
-- [ ] **Установить Node v22** на сервер (nodesource или nvm) — сейчас node отсутствует
+- [ ] **Установить Node v22 через NodeSource (apt)** — `/usr/bin/node`, работает из systemd и
+      неинтерактивного SSH (nvm отвергли: per-user, грузится через shell-хук, ломает юнит и CD).
+      Доставить `build-essential`/`python3` для node-gyp (`better-sqlite3`)
 - [ ] DNS A-запись `dexity.mvladt.ru` → `188.225.37.62`
 - [ ] Каталоги на сервере: `/srv/dexity` (релизы, `data/`, `.env`)
 - [ ] `.env` на сервере (`NODE_ENV=production`, токены Yandex, `ACCESS_TOKEN`)
