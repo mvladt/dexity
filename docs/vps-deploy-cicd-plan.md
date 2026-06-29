@@ -14,7 +14,7 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 | Сервер | **spb** `188.225.37.62` (СПб) | Веб-узел под `mvladt.ru`. Стек уже наш: nginx + node v22 + systemd + certbot |
 | Платформа CI/CD | **GitHub Actions** | Репо `git@github.com:mvladt/dexity.git`; согласовано с `mvladt/my-site` |
 | Стратегия доставки | **CI собирает → rsync артефактов** | build-once/immutable; сервер без тулчейна; согласовано с `mvladt.ru` |
-| Рантайм-зависимости сервера | **ставятся на VPS** (`npm ci --omit=dev`) | `better-sqlite3` — нативный модуль, ABI раннера ≠ ABI сервера |
+| SQLite-драйвер | **миграция на `node:sqlite`** (встроенный в Node) | убирает нативную зависимость → node_modules чисто JS → immutable-артефакт из CI без toolchain на сервере. Drizzle поддерживает через `drizzle-orm/node-sqlite`; drizzle-kit нам не нужен; минус — experimental в Node 22.x (warning) |
 | Триггер деплоя | **ручной** (`workflow_dispatch`) | Проверки — авто на push в main; выкатка — кнопкой. Позже легко на auto |
 | CI-гейт | **typecheck + build** обоих пакетов | Быстро, без секретов и внешних API. e2e — отдельно/позже |
 | Домен | `dexity.mvladt.ru` | Уже прописан в `nginx/dexity.conf` и спеке |
@@ -44,8 +44,10 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
    **Открытый под-вопрос:** пустит ли Reality-fallback запрос с SNI `dexity.mvladt.ru`
    (не в `serverNames`). Вероятно да (чужой SNI → fallback dest), но возможно придётся
    добавить домен в `serverNames` Xray. Проверить экспериментально на Этапе 2.
-2. **`better-sqlite3` нативный.** Не rsync'им `node_modules` сервера из CI — ставим на VPS
-   (`npm ci --omit=dev`), там же он соберётся под платформу сервера.
+2. **Нативная зависимость убрана.** Уходим с `better-sqlite3` на встроенный `node:sqlite`
+   (см. решение). После миграции `node_modules` сервера — чистый JS, можно собрать в CI и
+   rsync'нуть как immutable-артефакт. Требует апгрейда `drizzle-orm` 0.38 → 0.45+
+   (драйвер `node-sqlite` появился в 0.45) — возможны breaking changes Drizzle.
 3. **Путь к энтрипоинту.** `package.json` → `start: node dist/server/src/index.js`, но
    `deploy/dexity-server.service` и спека говорят `dist/index.js`. Из-за `include: ["src", "../shared"]`
    tsc раскладывает в `dist/server/src/...`. Сверить фактический выход `npm run build` и
@@ -70,6 +72,11 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 1 — CI (проверки в репозитории)
 
+- [ ] **Миграция SQLite-драйвера на `node:sqlite`:**
+      апгрейд `drizzle-orm` 0.38 → 0.45+; переписать `db/client.ts` на `node:sqlite` +
+      `drizzle-orm/node-sqlite`; тип в `migrate.ts` (`Database` → `DatabaseSync`); удалить
+      `better-sqlite3` + `@types/better-sqlite3`; `NODE_NO_WARNINGS=1` в systemd-юните; проверить
+      typecheck + ручной прогон (Node на сервере/локально ≥ 22.13). Локально проверено: v22.18 OK
 - [ ] Добавить npm-скрипты `typecheck` в `client` и `server` (`tsc --noEmit`)
 - [ ] Сверить фактический выход `npm run build` сервера, согласовать путь энтрипоинта (риск 3)
 - [ ] `.github/workflows/ci.yml`: на push/PR в `main` — typecheck + build обоих пакетов
@@ -96,7 +103,9 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 - [ ] Сгенерировать SSH deploy-ключ, положить публичный на сервер, приватный — в GitHub Secrets
 - [ ] Secrets: `SSH_KEY`, `DEPLOY_HOST` (+ при необходимости jump host)
 - [ ] `.github/workflows/deploy.yml` (`workflow_dispatch`):
-      build → rsync `client/dist` + `server/dist` → ssh: `npm ci --omit=dev` → `systemctl restart` → healthcheck
+      build + `npm ci --omit=dev` в CI → rsync `client/dist` + `server/dist` + prod `node_modules`
+      (чисто JS после ухода от better-sqlite3) → ssh: `systemctl restart` → healthcheck.
+      На сервере `npm` не вызываем — артефакт immutable
 - [ ] Решить про атомарность: `releases/<sha>` + симлинк `current` (риск 4)
 - [ ] Тестовая выкатка кнопкой, проверка прода
 
