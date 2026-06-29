@@ -13,9 +13,10 @@ interface Props {
   maxContext?: number;
   totalUsage?: { prompt: number; completion: number };
   placeholder?: string;
+  autoFocus?: boolean;
 }
 
-export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext, totalUsage, placeholder }: Props) {
+export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext, totalUsage, placeholder, autoFocus }: Props) {
   const model = useSettingsStore((s) => s.model);
   const setModel = useSettingsStore((s) => s.setModel);
 
@@ -40,7 +41,7 @@ export function ChatComposer({ onSend, onCancel, status, usedTokens, maxContext,
       onSend={onSend}
       onCancel={onCancel}
       status={status}
-      bodyProps={{ placeholder: placeholder ?? 'Напишите сообщение…' }}
+      bodyProps={{ placeholder: placeholder ?? 'Напишите сообщение…', autoFocus }}
       headerProps={
         showContextIndicator || showTotalUsage
           ? {

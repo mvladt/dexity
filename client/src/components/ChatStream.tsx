@@ -386,6 +386,7 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
       <div className="chat-fade" style={{ height: composerH + 16 }} />
       <div className="chat-input" ref={inputRef}>
         <ChatComposer
+          autoFocus
           onSend={handleSend}
           onCancel={async () => cancel()}
           status={streaming ? 'streaming' : 'ready'}

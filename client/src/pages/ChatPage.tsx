@@ -94,7 +94,7 @@ export function ChatPage() {
         />
       </div>
       <div className="chat-input">
-        <ChatComposer onSend={handleNewMessage} />
+        <ChatComposer autoFocus onSend={handleNewMessage} />
       </div>
     </div>
   );
