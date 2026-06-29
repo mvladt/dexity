@@ -359,6 +359,9 @@ body,
   left: 0;
   right: 0;
   bottom: 0;
+  /* Выше таблиц markdown: yfm задаёт `.yfm table { position: relative; z-index: 1 }`,
+     иначе широкая таблица рисуется поверх фейда и плавающего поля. */
+  z-index: 1;
   pointer-events: none;
   background: linear-gradient(to top, var(--g-color-base-background), transparent);
 }
@@ -371,6 +374,8 @@ body,
   left: 0;
   right: 0;
   bottom: 0;
+  /* Над фейдом (1) и таблицами markdown (yfm z-index: 1). */
+  z-index: 2;
   background: transparent;
   padding-block: 12px;
   padding-inline: max(16px, calc((100% - var(--chat-max-width)) / 2 + 16px));
