@@ -19,22 +19,31 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 | CI-гейт | **typecheck + build** обоих пакетов | Быстро, без секретов и внешних API. e2e — отдельно/позже |
 | Домен | `dexity.mvladt.ru` | Уже прописан в `nginx/dexity.conf` и спеке |
 
-## Контекст сервера spb (из `~/Projects/MyOwn/server-management`)
+## Контекст сервера spb (инспекция 2026-06-29, факты)
 
 - Доступ: `ssh root@188.225.37.62` по ключу. Из-за рубежа — через AMS как jump host:
   `ssh -J root@147.45.171.176 root@188.225.37.62`.
-- **nginx слушает `127.0.0.1:8443` за Xray** (VLESS+Reality на `:443`). `mvladt.ru`,
-  `scheduler.push.mvladt.ru`, `webpushtest.mvladt.ru` маршрутизируются через эту схему.
-- `mvladt.ru` катится через **GitHub Actions → rsync → `/srv/my-site`** (репо `mvladt/my-site`) —
-  это эталон, на который равняемся.
-- certbot + cron (автообновление сертификатов). UFW на spb **выключен**.
-- PostgreSQL есть, но нам не нужен (у нас SQLite).
+- **Активны только `nginx` + `xray`.** Никаких node-сервисов сейчас нет
+  (`mvladt-nuxt`, `webpush-scheduler` не запущены/удалены — `server-spb.md` устарел).
+- **Схема TLS за Xray:** Xray слушает `:443` (VLESS+Reality), fallback `dest: 127.0.0.1:8443`,
+  `serverNames: ["mvladt.ru"]`. **nginx сам терминирует TLS** на `127.0.0.1:8443 ssl`
+  (см. `/etc/nginx/conf.d/mvladt.conf`). Реальные конфиги — в `conf.d/`, не в `sites-enabled/`.
+- `mvladt.ru` сейчас — **чистая статика**: `root /srv/my-site; try_files`. Отдельный
+  server-block на `:80` обслуживает ACME-challenge + редирект на https.
+- certbot: выпущен только `mvladt.ru`. UFW **выключен**.
+- ⚠️ **Node на сервере НЕ установлен** (`command -v node` пусто, пакета `nodejs` нет).
+  Для Fastify-бэка Dexity Node ставим сами (Этап 2).
+- ⚠️ **CI-deploy-ключа нет.** В `authorized_keys` только личные ключи (MacBook, iPhone, десктоп) —
+  эталонного GitHub Actions deploy для `my-site` на сервере не обнаружено. Заводим с нуля (Этап 3).
 
 ## Критические риски / открытые вопросы
 
-1. **nginx за Xray.** Заготовленный `nginx/dexity.conf` с `listen 443 ssl` в лоб **не ляжет** —
-   на spb 443 занят Xray, nginx сидит на `127.0.0.1:8443`. Надо понять схему фронтинга и
-   встроить `dexity.mvladt.ru` так же, как остальные домены. → Этап 0.
+1. **nginx за Xray — схема понятна.** `nginx/dexity.conf` переписать по образцу `mvladt.conf`:
+   server-block `listen 127.0.0.1:8443 ssl; server_name dexity.mvladt.ru;` (nginx сам терминирует
+   TLS) + блок `:80` для ACME + редирект + `location /api/ → proxy_pass 127.0.0.1:3001`.
+   **Открытый под-вопрос:** пустит ли Reality-fallback запрос с SNI `dexity.mvladt.ru`
+   (не в `serverNames`). Вероятно да (чужой SNI → fallback dest), но возможно придётся
+   добавить домен в `serverNames` Xray. Проверить экспериментально на Этапе 2.
 2. **`better-sqlite3` нативный.** Не rsync'им `node_modules` сервера из CI — ставим на VPS
    (`npm ci --omit=dev`), там же он соберётся под платформу сервера.
 3. **Путь к энтрипоинту.** `package.json` → `start: node dist/server/src/index.js`, но
@@ -50,14 +59,14 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ## Этапы
 
-### Этап 0 — Инспекция сервера (read-only, до любого кода)
+### Этап 0 — Инспекция сервера (read-only) — ✅ выполнено 2026-06-29
 
-- [ ] Схема nginx за Xray: как маршрутизируются домены, куда встроить `dexity.mvladt.ru`
-- [ ] Как сделан deploy-доступ для `my-site` (deploy-ключ? пользователь? rsync-таргет?) — переиспользовать паттерн
-- [ ] Версии `node`/`npm` на сервере; совместимость с нативной сборкой `better-sqlite3`
-- [ ] DNS: есть ли A-запись `dexity.mvladt.ru` → `188.225.37.62`
-- [ ] Как certbot выпускает/обновляет сертификаты на этом сервере
-- [ ] Записать находки в этот файл, уточнить риски 1–3
+- [x] Схема nginx за Xray — разобрана (см. контекст и риск 1)
+- [x] Deploy-доступ `my-site` — отдельного CI-ключа нет, только личные ключи
+- [x] `node`/`npm` — **не установлены**, ставим на Этапе 2
+- [x] DNS `dexity.mvladt.ru` — A-записи нет, заводим на Этапе 2
+- [x] certbot — выпущен только `mvladt.ru`, для dexity выпускаем на Этапе 2
+- [x] Находки записаны, риски 1–3 уточнены
 
 ### Этап 1 — CI (проверки в репозитории)
 
@@ -68,12 +77,16 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 2 — Первичная настройка прода (ручная, один раз)
 
+- [ ] **Установить Node v22** на сервер (nodesource или nvm) — сейчас node отсутствует
 - [ ] DNS A-запись `dexity.mvladt.ru` → `188.225.37.62`
 - [ ] Каталоги на сервере: `/srv/dexity` (релизы, `data/`, `.env`)
 - [ ] `.env` на сервере (`NODE_ENV=production`, токены Yandex, `ACCESS_TOKEN`)
 - [ ] systemd-юнит (поправить путь энтрипоинта), `enable --now`
-- [ ] nginx server-block для `dexity.mvladt.ru`, встроенный в схему за Xray
+- [ ] nginx server-block для `dexity.mvladt.ru` по образцу `mvladt.conf`
+      (`listen 127.0.0.1:8443 ssl` + `:80` ACME/redirect + `location /api/` → `:3001`)
 - [ ] TLS-сертификат (certbot) для `dexity.mvladt.ru`
+- [ ] Проверить Reality-fallback для SNI `dexity.mvladt.ru` (риск 1); при необходимости
+      добавить домен в `serverNames` Xray
 - [ ] **Первый ручной деплой и проверка живого прода** — до автоматизации
 
 ### Этап 3 — CD (workflow выкатки)
@@ -96,3 +109,5 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 ## Журнал
 
 - 2026-06-25 — план составлен, решения зафиксированы. Следующий шаг: Этап 0 (инспекция сервера).
+- 2026-06-29 — Этап 0 выполнен. Находки: node не установлен, CI-deploy-ключа нет, nginx за
+  Xray на `127.0.0.1:8443 ssl`, mvladt.ru — статика. План скорректирован. Следующий шаг: Этап 1 (CI).
