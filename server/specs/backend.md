@@ -10,8 +10,8 @@ server/
 │   ├── index.ts              # точка входа: Fastify, плагины, listen
 │   ├── config.ts             # читает .env, валидирует через zod, экспортирует типизированный конфиг
 │   ├── db/
-│   │   ├── client.ts         # better-sqlite3 + Drizzle
-│   │   ├── schema.ts         # Drizzle-схема
+│   │   ├── client.ts         # node:sqlite (DatabaseSync)
+│   │   ├── queries.ts        # SQL-запросы: prepared statements + row-типы
 │   │   └── migrate.ts        # db.exec(CREATE TABLE IF NOT EXISTS ...)
 │   ├── plugins/
 │   │   ├── auth.ts           # preHandler hook: Bearer token check
@@ -35,22 +35,20 @@ server/
   "dependencies": {
     "fastify": "^5",
     "@fastify/cors": "^10",
-    "better-sqlite3": "^11",
-    "drizzle-orm": "^0.38",
     "openai": "^4",
     "dotenv": "^16",
     "zod": "^3"
   },
   "devDependencies": {
     "tsx": "^4",
-    "@types/better-sqlite3": "^7",
     "@types/node": "^22",
     "typescript": "^5"
   }
 }
 ```
 
-> Никакого `drizzle-kit` — миграция одной командой `db.exec(...)` при старте.
+> Без ORM: SQLite через встроенный `node:sqlite` (`DatabaseSync`), запросы — prepared statements
+> в `db/queries.ts`. Миграция — одной командой `db.exec(...)` при старте, без CLI-инструментов.
 
 **`tsconfig.json`:** `"module": "NodeNext"`, `"target": "ES2022"`, `"strict": true`, `"paths": { "@shared/*": ["../shared/*"] }`.
 
@@ -72,7 +70,7 @@ server/
 
 ---
 
-## Схема БД (SQLite + Drizzle ORM)
+## Схема БД (SQLite, без ORM)
 
 ### Таблицы
 
@@ -108,48 +106,44 @@ CREATE INDEX IF NOT EXISTS idx_chats_user_id         ON chats(user_id);
 INSERT OR IGNORE INTO users (id) VALUES (1);
 ```
 
-### Drizzle-схема (`server/src/db/schema.ts`)
+### Row-типы и запросы (`server/src/db/queries.ts`)
+
+Типизированные обёртки над `sqlite.prepare(sql)` — SQL пишется вручную, колонки в `SELECT`/`RETURNING`
+алиасятся под camelCase (`user_id AS userId` и т.п.), чтобы форма ответа совпадала с `shared/types.ts`.
 
 ```typescript
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
-import { sql } from "drizzle-orm";
+export interface ChatRow {
+  id: number;
+  userId: number;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
-export const chats = sqliteTable("chats", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").notNull().default(1),
-  title: text("title").notNull().default("Новый чат"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-  updatedAt: text("updated_at")
-    .notNull()
-    .default(sql`(datetime('now'))`),
-});
+export interface MessageRow {
+  id: number;
+  chatId: number;
+  role: 'user' | 'assistant';
+  content: string;
+  thinking: string | null;
+  toolData: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  createdAt: string;
+}
 
-export const messages = sqliteTable(
-  "messages",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    chatId: integer("chat_id")
-      .notNull()
-      .references(() => chats.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["user", "assistant"] }).notNull(),
-    content: text("content").notNull(),
-    createdAt: text("created_at")
-      .notNull()
-      .default(sql`(datetime('now'))`),
-  },
-  (t) => ({
-    chatIdx: index("idx_messages_chat_id").on(t.chatId),
-  }),
-);
+export function listChats(userId: number): ChatRow[] { /* SELECT ... WHERE user_id = ? */ }
+export function createChat(userId: number, title: string): ChatRow { /* INSERT ... RETURNING ... */ }
+// + renameChat, deleteChat, getChatId, touchChat, retitleChat,
+//   listMessages, recentMessages, insertUserMessage, insertAssistantMessage
 ```
+
+Роуты (`routes/chats.ts`, `routes/messages.ts`) вызывают эти функции напрямую — без query builder'а.
 
 ### Миграция
 
-Без `drizzle-kit`. При старте сервера выполняется один SQL-блок через `db.exec(...)`. Файл — `server/src/db/migrate.ts`.
-
-> Drizzle используется **только как query builder** (типобезопасные select/insert/update). Никаких CLI-инструментов и автогенерации миграций.
+При старте сервера выполняется один SQL-блок через `db.exec(...)`. Файл — `server/src/db/migrate.ts`.
+Никакого ORM и CLI-инструментов для миграций.
 
 ---
 

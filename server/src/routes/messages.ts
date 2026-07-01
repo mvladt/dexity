@@ -1,10 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { eq, asc, desc, sql } from 'drizzle-orm';
 import type { MessageToolData, PartSnapshot, Source } from '../../../shared/types.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { db } from '../db/client.js';
-import { chats, messages } from '../db/schema.js';
+import {
+  getChatId,
+  listMessages,
+  recentMessages,
+  insertUserMessage,
+  insertAssistantMessage,
+  touchChat,
+  retitleChat,
+} from '../db/queries.js';
 import { streamChat } from '../services/llm.js';
 import { webSearch, webSearchTool } from '../services/search.js';
 import { fetchUrl, webFetchTool, type FetchResult } from '../services/fetch.js';
@@ -64,14 +70,9 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const idResult = chatIdSchema.safeParse((request.params as { chatId: string }).chatId);
     if (!idResult.success) return reply.status(400).send({ error: 'Invalid chatId' });
 
-    const [chat] = await db.select().from(chats).where(eq(chats.id, idResult.data));
-    if (!chat) return reply.status(404).send({ error: 'Chat not found' });
+    if (getChatId(idResult.data) === undefined) return reply.status(404).send({ error: 'Chat not found' });
 
-    const rows = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.chatId, idResult.data))
-      .orderBy(asc(messages.createdAt));
+    const rows = listMessages(idResult.data);
     return reply.send(
       rows.map((r) => ({
         ...r,
@@ -93,15 +94,9 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     const webSearchEnabled = bodyResult.data.webSearch === true;
     const timeZone = bodyResult.data.timeZone;
 
-    const [chat] = await db.select().from(chats).where(eq(chats.id, chatId));
-    if (!chat) return reply.status(404).send({ error: 'Chat not found' });
+    if (getChatId(chatId) === undefined) return reply.status(404).send({ error: 'Chat not found' });
 
-    let history = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.chatId, chatId))
-      .orderBy(desc(messages.createdAt))
-      .limit(20);
+    let history = recentMessages(chatId, 20);
     history = history.reverse();
 
     if (history.length > 0 && history[0].role === 'assistant') {
@@ -121,10 +116,7 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
       history.filter((m) => m.role === 'user').length - (isRetry ? 1 : 0);
 
     if (!isRetry) {
-      await db
-        .insert(messages)
-        .values({ chatId, role: 'user', content: userContent })
-        .returning();
+      insertUserMessage(chatId, userContent);
     }
 
     reply.raw.writeHead(200, {
@@ -184,35 +176,25 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
         ? { sources: allSources, calls: callsSources, parts: partsLog }
         : null;
 
-      const [assistantMsg] = await db
-        .insert(messages)
-        .values({
-          chatId,
-          role: 'assistant',
-          content: fullContent,
-          thinking: fullThinking || null,
-          toolData: toolData ? JSON.stringify(toolData) : null,
-          promptTokens: hasUsage ? promptTokens : null,
-          completionTokens: hasUsage ? completionTokens : null,
-        })
-        .returning();
+      const assistantId = insertAssistantMessage({
+        chatId,
+        content: fullContent,
+        thinking: fullThinking || null,
+        toolData: toolData ? JSON.stringify(toolData) : null,
+        promptTokens: hasUsage ? promptTokens : null,
+        completionTokens: hasUsage ? completionTokens : null,
+      });
 
-      await db
-        .update(chats)
-        .set({ updatedAt: sql`(datetime('now'))` })
-        .where(eq(chats.id, chatId));
+      touchChat(chatId);
 
       let chatTitle: string | undefined;
       if (userMessagesBefore === 0) {
         chatTitle = buildTitle(userContent);
-        await db
-          .update(chats)
-          .set({ title: chatTitle, updatedAt: sql`(datetime('now'))` })
-          .where(eq(chats.id, chatId));
+        retitleChat(chatId, chatTitle);
       }
 
       saved = true;
-      return { id: assistantMsg.id, toolData, chatTitle };
+      return { id: assistantId, toolData, chatTitle };
     }
 
     try {

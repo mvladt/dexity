@@ -5,7 +5,7 @@
 ## Стек
 
 - **Frontend:** React 18, TypeScript, Vite, Zustand, `@gravity-ui/uikit` + `@gravity-ui/aikit`
-- **Backend:** Node.js, Fastify, SQLite, Drizzle ORM, Zod
+- **Backend:** Node.js, Fastify, SQLite (`node:sqlite`, без ORM), Zod
 - **LLM:** Yandex Cloud AI Studio (OpenAI-совместимый SDK)
 
 ## Структура
@@ -24,7 +24,7 @@ dexity/
 ## Критичные решения
 
 - **Model ID** формируется на бэке: `` `gpt://${YC_FOLDER_ID}/${MODEL_ID}/latest` ``
-- **Drizzle** — только как query builder (типобезопасные select/insert/update). Без `drizzle-kit`, без CLI-миграций. Миграция — один `db.exec(...)` при старте (`server/src/db/migrate.ts`)
+- **SQLite** — без ORM, напрямую через `node:sqlite` (`DatabaseSync`). Запросы — prepared statements в `server/src/db/queries.ts`. Миграция — один `db.exec(...)` при старте (`server/src/db/migrate.ts`)
 - **Стриминг** — SSE: бэк проксирует поток от Yandex, фронт читает через `fetch` + `ReadableStream` (не `EventSource` — не поддерживает POST и `Authorization`)
 - **Контекст LLM** — бэк загружает полную историю из SQLite и передаёт в `messages[]` при каждом запросе
 - **Аутентификация** — единый `ACCESS_TOKEN` в `.env`; `Authorization: Bearer <token>`
