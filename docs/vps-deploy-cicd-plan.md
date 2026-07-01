@@ -14,7 +14,8 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 | Сервер | **spb** `188.225.37.62` (СПб) | Веб-узел под `mvladt.ru`. Стек уже наш: nginx + node v22 + systemd + certbot |
 | Платформа CI/CD | **GitHub Actions** | Репо `git@github.com:mvladt/dexity.git`; согласовано с `mvladt/my-site` |
 | Стратегия доставки | **CI собирает → rsync артефактов** | build-once/immutable; сервер без тулчейна; согласовано с `mvladt.ru` |
-| SQLite-драйвер | **миграция на `node:sqlite`** (встроенный в Node) | убирает нативную зависимость целиком (`better-sqlite3` + `@types`). Мотив — минимализм: нативный API вместо стороннего пакета. Drizzle поддерживает через `drizzle-orm/node-sqlite`; drizzle-kit не нужен. На Node 24 LTS API **стабилен** (не experimental) — поэтому деплоим на 24, не на 22. NB: better-sqlite3 тоже поставляется prebuilt (immutable-артефакт достижим и с ним), так что выбор именно по критерию «−1 зависимость», а не по toolchain |
+| SQLite-драйвер | **миграция на `node:sqlite`** (встроенный в Node) | убирает нативную зависимость целиком (`better-sqlite3` + `@types`). Мотив — минимализм: нативный API вместо стороннего пакета. На Node 24 LTS API **стабилен** (не experimental) — поэтому деплоим на 24, не на 22. NB: better-sqlite3 тоже поставляется prebuilt (immutable-артефакт достижим и с ним), так что выбор именно по критерию «−1 зависимость», а не по toolchain |
+| ORM | **убран целиком** (2026-07-01) | `drizzle-orm/node-sqlite` существует только в 1.0-RC (стабильная ветка 0.x — без него). Взамен адаптации под pre-release ORM разобрали фактическое использование: 6 статичных CRUD-запросов без динамической композиции — Drizzle не давал ничего сверх типизации. Заменили на `server/src/db/queries.ts`: именованные функции над `node:sqlite` prepared statements (`?`-параметры, `RETURNING` — нативная поддержка SQLite), row-типы вручную. Итог: минус зависимость, минус проблема RC-версии, тот же уровень типобезопасности на входе/выходе |
 | Версия Node на сервере | **Node 24 LTS** (NodeSource apt) | `node:sqlite` стабилизирован в Node 24 → нет experimental-warning'ов, `NODE_NO_WARNINGS` не нужен. Ставим с нуля — нет причин брать 22 |
 | Xray Reality | **оставляем** | spb — входная нода личного VPN (`spb → ams → интернет`), Reality несёт анти-DPI камуфляж против РКН. Dexity лишь добавляет `server_name` в nginx за fallback'ом — отказ от Reality не упрощает Dexity, но ломает устойчивость VPN |
 | Триггер деплоя | **ручной** (`workflow_dispatch`) | Проверки — авто на push в main; выкатка — кнопкой. Позже легко на auto |
@@ -46,10 +47,11 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
    **Открытый под-вопрос:** пустит ли Reality-fallback запрос с SNI `dexity.mvladt.ru`
    (не в `serverNames`). Вероятно да (чужой SNI → fallback dest), но возможно придётся
    добавить домен в `serverNames` Xray. Проверить экспериментально на Этапе 2.
-2. **Нативная зависимость убрана.** Уходим с `better-sqlite3` на встроенный `node:sqlite`
-   (см. решение). После миграции `node_modules` сервера — чистый JS, можно собрать в CI и
-   rsync'нуть как immutable-артефакт. Требует апгрейда `drizzle-orm` 0.38 → 0.45+
-   (драйвер `node-sqlite` появился в 0.45) — возможны breaking changes Drizzle.
+2. ✅ **Нативная зависимость убрана — решено и выполнено (2026-07-01).** Уходим с `better-sqlite3`
+   на встроенный `node:sqlite`. По пути обнаружилось: `drizzle-orm/node-sqlite` есть только
+   в 1.0-RC, не в стабильной 0.x — апгрейд ORM оказался невозможен как задумано. Решение —
+   убрать Drizzle целиком (см. таблицу решений), заменить на `db/queries.ts` с raw SQL.
+   `node_modules` сервера — чистый JS, immutable-артефакт из CI подтверждён сборкой.
 3. ✅ **Путь к энтрипоинту — решено (2026-06-30).** Факт: `package.json` и
    `deploy/dexity-server.service` уже используют рабочий `dist/server/src/index.js`
    (tsc так раскладывает из-за `include: ["src", "../shared"]`). Расходилась только спека —
@@ -78,16 +80,20 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 1 — CI (проверки в репозитории)
 
-- [ ] **Миграция SQLite-драйвера на `node:sqlite`:**
-      апгрейд `drizzle-orm` 0.38 → 0.45+; переписать `db/client.ts` на `node:sqlite` +
-      `drizzle-orm/node-sqlite`; тип в `migrate.ts` (`Database` → `DatabaseSync`); удалить
-      `better-sqlite3` + `@types/better-sqlite3`. На Node 24 API стабилен → `NODE_NO_WARNINGS`
-      не нужен. Проверить typecheck + ручной прогон; сверить Drizzle 0.45+ с Node 24.
-      Локально (v22.18) node:sqlite работает с experimental-warning'ом
-- [ ] Добавить npm-скрипты `typecheck` в `client` и `server` (`tsc --noEmit`)
-- [ ] Сверить фактический выход `npm run build` сервера, согласовать путь энтрипоинта (риск 3)
-- [ ] `.github/workflows/ci.yml`: на push/PR в `main` — typecheck + build обоих пакетов
-- [ ] Прогнать CI, убедиться что зелёный
+- [x] **Миграция SQLite-драйвера на `node:sqlite` + удаление Drizzle** (2026-07-01):
+      `db/client.ts` → `DatabaseSync` напрямую; `db/schema.ts` заменён на `db/queries.ts`
+      (типизированные функции над prepared statements, `RETURNING` для insert/update);
+      `routes/chats.ts` и `routes/messages.ts` переписаны на эти функции; удалены
+      `better-sqlite3`, `@types/better-sqlite3`, `drizzle-orm`. Проверено: typecheck зелёный,
+      живой dev-сервер (реальные данные в `data/db.sqlite3`) — полный CRUD + cascade delete +
+      nullable-поля протестированы вручную через curl и изолированный скрипт
+- [x] Добавить npm-скрипты `typecheck` в `client` и `server` (`tsc --noEmit`) — готово
+- [x] Сверить фактический выход `npm run build` сервера — подтверждено:
+      `dist/server/src/index.js`, совпадает с `package.json`/`deploy/dexity-server.service`
+- [x] `.github/workflows/ci.yml`: два job'а (`server`, `client`), push/PR в `main`,
+      Node 24 (совпадает с прод-версией), `npm ci` → `typecheck` → `build`. Оба билда
+      прогнаны локально с чистым `node_modules` — зелёные
+- [ ] Прогнать CI на GitHub, убедиться что зелёный
 
 ### Этап 2 — Первичная настройка прода (ручная, один раз)
 
@@ -137,3 +143,12 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
   (`/srv/dexity/data`) — приняты. Сверился с `server-management`: `spb-reinstall-plan.md` уже
   выполнен (2026-06-10), сервер стабилен — конфликта по таймингу нет, путь свободен.
   Следующий шаг: Этап 1 (CI).
+- 2026-07-01 — Этап 1 выполнен (кроме прогона CI на GitHub). По ходу миграции обнаружилось:
+  `drizzle-orm/node-sqlite` есть только в 1.0-RC (вышла 3 дня назад), не в стабильной 0.x —
+  план «апгрейд Drizzle 0.38→0.45+» оказался технически невозможен. Разбор фактического
+  использования показал: 6 статичных CRUD-запросов, Drizzle не давал ничего сверх типизации —
+  решили убрать ORM целиком, заменить на `db/queries.ts` (raw SQL + prepared statements +
+  RETURNING). Плюс: минус зависимость, минус проблема pre-release версии. Добавлены
+  typecheck-скрипты и `.github/workflows/ci.yml`. Всё проверено локально (typecheck, чистая
+  сборка, живой CRUD на реальных данных). Следующий шаг: запушить и проверить CI на GitHub,
+  затем Этап 2 (сервер).
