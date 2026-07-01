@@ -66,7 +66,7 @@ server/
 "scripts": {
   "dev":   "tsx watch src/index.ts",
   "build": "tsc",
-  "start": "node dist/index.js"
+  "start": "node dist/server/src/index.js"
 }
 ```
 
@@ -392,7 +392,7 @@ Type=simple
 User=dexity
 WorkingDirectory=/var/www/dexity/server
 EnvironmentFile=/var/www/dexity/server/.env
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=/usr/bin/node dist/server/src/index.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

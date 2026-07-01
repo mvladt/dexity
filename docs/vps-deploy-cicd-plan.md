@@ -14,7 +14,9 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 | Сервер | **spb** `188.225.37.62` (СПб) | Веб-узел под `mvladt.ru`. Стек уже наш: nginx + node v22 + systemd + certbot |
 | Платформа CI/CD | **GitHub Actions** | Репо `git@github.com:mvladt/dexity.git`; согласовано с `mvladt/my-site` |
 | Стратегия доставки | **CI собирает → rsync артефактов** | build-once/immutable; сервер без тулчейна; согласовано с `mvladt.ru` |
-| SQLite-драйвер | **миграция на `node:sqlite`** (встроенный в Node) | убирает нативную зависимость → node_modules чисто JS → immutable-артефакт из CI без toolchain на сервере. Drizzle поддерживает через `drizzle-orm/node-sqlite`; drizzle-kit нам не нужен; минус — experimental в Node 22.x (warning) |
+| SQLite-драйвер | **миграция на `node:sqlite`** (встроенный в Node) | убирает нативную зависимость целиком (`better-sqlite3` + `@types`). Мотив — минимализм: нативный API вместо стороннего пакета. Drizzle поддерживает через `drizzle-orm/node-sqlite`; drizzle-kit не нужен. На Node 24 LTS API **стабилен** (не experimental) — поэтому деплоим на 24, не на 22. NB: better-sqlite3 тоже поставляется prebuilt (immutable-артефакт достижим и с ним), так что выбор именно по критерию «−1 зависимость», а не по toolchain |
+| Версия Node на сервере | **Node 24 LTS** (NodeSource apt) | `node:sqlite` стабилизирован в Node 24 → нет experimental-warning'ов, `NODE_NO_WARNINGS` не нужен. Ставим с нуля — нет причин брать 22 |
+| Xray Reality | **оставляем** | spb — входная нода личного VPN (`spb → ams → интернет`), Reality несёт анти-DPI камуфляж против РКН. Dexity лишь добавляет `server_name` в nginx за fallback'ом — отказ от Reality не упрощает Dexity, но ломает устойчивость VPN |
 | Триггер деплоя | **ручной** (`workflow_dispatch`) | Проверки — авто на push в main; выкатка — кнопкой. Позже легко на auto |
 | CI-гейт | **typecheck + build** обоих пакетов | Быстро, без секретов и внешних API. e2e — отдельно/позже |
 | Домен | `dexity.mvladt.ru` | Уже прописан в `nginx/dexity.conf` и спеке |
@@ -48,14 +50,18 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
    (см. решение). После миграции `node_modules` сервера — чистый JS, можно собрать в CI и
    rsync'нуть как immutable-артефакт. Требует апгрейда `drizzle-orm` 0.38 → 0.45+
    (драйвер `node-sqlite` появился в 0.45) — возможны breaking changes Drizzle.
-3. **Путь к энтрипоинту.** `package.json` → `start: node dist/server/src/index.js`, но
-   `deploy/dexity-server.service` и спека говорят `dist/index.js`. Из-за `include: ["src", "../shared"]`
-   tsc раскладывает в `dist/server/src/...`. Сверить фактический выход `npm run build` и
-   согласовать unit + спеку. → Этап 1/2.
-4. **Атомарность релизов.** Желательно `releases/<sha>` + симлинк `current` вместо rsync поверх
-   живого каталога (иначе юзер может застать полусобранное состояние). Решить на Этапе 3.
-5. **Бэкап SQLite.** `data/db.sqlite3` — единственное состояние. Не затирать при деплое; подумать
-   о бэкапе. → Этап 2.
+3. ✅ **Путь к энтрипоинту — решено (2026-06-30).** Факт: `package.json` и
+   `deploy/dexity-server.service` уже используют рабочий `dist/server/src/index.js`
+   (tsc так раскладывает из-за `include: ["src", "../shared"]`). Расходилась только спека —
+   синхронизирована (`server/specs/backend.md`). Остаётся при реализации Этапа 1 сверить
+   фактический выход `npm run build`.
+4. ✅ **Атомарность релизов — решено (2026-06-30): да, `releases/<sha>` + симлинк `current`.**
+   Деплой: rsync в новый `releases/<sha>` → переключить симлинк → `systemctl restart`. rsync поверх
+   живого каталога при WAL-SQLite и работающем процессе исключён. Детали скрипта — Этап 3.
+5. ✅ **Бэкап SQLite — решено (2026-06-30): БД живёт вне релизов.** Схема каталогов:
+   `/srv/dexity/{releases/<sha>, data/, .env, current→releases/<sha>}`. `data/db.sqlite3` (+ `-wal`,
+   `-shm`) — в `/srv/dexity/data`, симлинком внутрь релиза → деплой физически её не трогает.
+   Бэкап — cron + `sqlite3 .backup` (или `cp` при остановленном процессе). → Этап 2.
 6. **Секреты.** `.env` живёт **на сервере** (не в CI). В GitHub Secrets — только SSH deploy-ключ
    и хост. Yandex-ключи в CI не нужны (гейт без e2e).
 
@@ -75,8 +81,9 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 - [ ] **Миграция SQLite-драйвера на `node:sqlite`:**
       апгрейд `drizzle-orm` 0.38 → 0.45+; переписать `db/client.ts` на `node:sqlite` +
       `drizzle-orm/node-sqlite`; тип в `migrate.ts` (`Database` → `DatabaseSync`); удалить
-      `better-sqlite3` + `@types/better-sqlite3`; `NODE_NO_WARNINGS=1` в systemd-юните; проверить
-      typecheck + ручной прогон (Node на сервере/локально ≥ 22.13). Локально проверено: v22.18 OK
+      `better-sqlite3` + `@types/better-sqlite3`. На Node 24 API стабилен → `NODE_NO_WARNINGS`
+      не нужен. Проверить typecheck + ручной прогон; сверить Drizzle 0.45+ с Node 24.
+      Локально (v22.18) node:sqlite работает с experimental-warning'ом
 - [ ] Добавить npm-скрипты `typecheck` в `client` и `server` (`tsc --noEmit`)
 - [ ] Сверить фактический выход `npm run build` сервера, согласовать путь энтрипоинта (риск 3)
 - [ ] `.github/workflows/ci.yml`: на push/PR в `main` — typecheck + build обоих пакетов
@@ -84,9 +91,10 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 2 — Первичная настройка прода (ручная, один раз)
 
-- [ ] **Установить Node v22 через NodeSource (apt)** — `/usr/bin/node`, работает из systemd и
+- [ ] **Установить Node 24 LTS через NodeSource (apt)** — `/usr/bin/node`, работает из systemd и
       неинтерактивного SSH (nvm отвергли: per-user, грузится через shell-хук, ломает юнит и CD).
-      Доставить `build-essential`/`python3` для node-gyp (`better-sqlite3`)
+      `build-essential`/`python3` НЕ нужны — после ухода на `node:sqlite` нативных модулей нет.
+      Сверить glibc сервера (на случай если решим вернуть prebuilt-зависимости)
 - [ ] DNS A-запись `dexity.mvladt.ru` → `188.225.37.62`
 - [ ] Каталоги на сервере: `/srv/dexity` (релизы, `data/`, `.env`)
 - [ ] `.env` на сервере (`NODE_ENV=production`, токены Yandex, `ACCESS_TOKEN`)
@@ -122,3 +130,10 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 - 2026-06-25 — план составлен, решения зафиксированы. Следующий шаг: Этап 0 (инспекция сервера).
 - 2026-06-29 — Этап 0 выполнен. Находки: node не установлен, CI-deploy-ключа нет, nginx за
   Xray на `127.0.0.1:8443 ssl`, mvladt.ru — статика. План скорректирован. Следующий шаг: Этап 1 (CI).
+- 2026-06-30 — разбор рисков перед стартом. Решения: (1) Reality оставляем — spb это вход личного
+  VPN, отказ ломает анти-РКН камуфляж и не упрощает Dexity; (2) подтверждён `node:sqlite`, но
+  деплой на **Node 24 LTS** (там API стабилен, без warning'ов); (3) энтрипоинт — спека
+  синхронизирована, риск закрыт; (4–5) атомарные релизы `releases/<sha>`+симлинк и БД вне релизов
+  (`/srv/dexity/data`) — приняты. Сверился с `server-management`: `spb-reinstall-plan.md` уже
+  выполнен (2026-06-10), сервер стабилен — конфликта по таймингу нет, путь свободен.
+  Следующий шаг: Этап 1 (CI).
