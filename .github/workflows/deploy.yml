@@ -1,0 +1,91 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: dexity-deploy
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: 188.225.37.62
+  DEPLOY_USER: dexity
+  DEPLOY_ROOT: /srv/dexity
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Собрать сервер
+        working-directory: server
+        run: |
+          npm ci
+          npm run build
+          npm prune --omit=dev
+
+      - name: Собрать клиент
+        working-directory: client
+        run: |
+          npm ci
+          VITE_API_URL='' npm run build
+
+      - name: SHA релиза
+        id: release
+        run: echo "sha=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Настроить SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_HOST_KEY }}" > ~/.ssh/known_hosts
+
+      - name: Залить артефакты релиза
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          SSH="ssh -i $HOME/.ssh/deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o IdentitiesOnly=yes"
+          RELEASE="$DEPLOY_ROOT/releases/$SHA"
+          $SSH "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p $RELEASE/server $RELEASE/client"
+          rsync -az -e "$SSH" server/dist server/node_modules server/package.json \
+            "$DEPLOY_USER@$DEPLOY_HOST:$RELEASE/server/"
+          rsync -az -e "$SSH" client/dist "$DEPLOY_USER@$DEPLOY_HOST:$RELEASE/client/"
+
+      - name: Переключить релиз и перезапустить сервис
+        env:
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          SSH="ssh -i $HOME/.ssh/deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o IdentitiesOnly=yes"
+          RELEASE="$DEPLOY_ROOT/releases/$SHA"
+          $SSH "$DEPLOY_USER@$DEPLOY_HOST" "
+            ln -sfn $DEPLOY_ROOT/data $RELEASE/server/data &&
+            ln -sfn $RELEASE $DEPLOY_ROOT/current &&
+            sudo systemctl restart dexity-server &&
+            ls -1dt $DEPLOY_ROOT/releases/*/ | tail -n +6 | xargs -r rm -rf
+          "
+
+      - name: Проверить прод
+        run: |
+          sleep 2
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+            -X POST https://dexity.mvladt.ru/api/auth/verify \
+            -H 'Content-Type: application/json' -d '{"token":"x"}')
+          echo "Ответ /api/auth/verify: $code"
+          if [ "$code" != "401" ]; then
+            echo "Ожидался 401 (сервер жив, токен неверный), получено $code"
+            exit 1
+          fi
+          static=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://dexity.mvladt.ru/)
+          echo "Ответ /: $static"
+          if [ "$static" != "200" ]; then
+            echo "Ожидался 200 для статики, получено $static"
+            exit 1
+          fi
