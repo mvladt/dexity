@@ -1,12 +1,12 @@
 [Unit]
-Description=AI Chat backend (Fastify)
+Description=Dexity backend (Fastify)
 After=network.target
 
 [Service]
 Type=simple
 User=dexity
-WorkingDirectory=/var/www/dexity/server
-EnvironmentFile=/var/www/dexity/server/.env
+WorkingDirectory=/srv/dexity/current/server
+EnvironmentFile=/srv/dexity/.env
 ExecStart=/usr/bin/node dist/server/src/index.js
 Restart=on-failure
 RestartSec=5
