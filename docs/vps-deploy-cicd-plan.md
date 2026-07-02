@@ -2,6 +2,8 @@
 
 Статус: **в работе**. Многосессионная задача. Этот файл — источник правды по контексту и прогрессу.
 
+**Прод живой:** https://dexity.mvladt.ru (с 2026-07-02, задеплоен вручную, без CD)
+
 ## Цель
 
 Развернуть Dexity на проде (`dexity.mvladt.ru`) и настроить CI/CD: проверки на каждый
@@ -41,12 +43,11 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ## Критические риски / открытые вопросы
 
-1. **nginx за Xray — схема понятна.** `nginx/dexity.conf` переписать по образцу `mvladt.conf`:
-   server-block `listen 127.0.0.1:8443 ssl; server_name dexity.mvladt.ru;` (nginx сам терминирует
-   TLS) + блок `:80` для ACME + редирект + `location /api/ → proxy_pass 127.0.0.1:3001`.
-   **Открытый под-вопрос:** пустит ли Reality-fallback запрос с SNI `dexity.mvladt.ru`
-   (не в `serverNames`). Вероятно да (чужой SNI → fallback dest), но возможно придётся
-   добавить домен в `serverNames` Xray. Проверить экспериментально на Этапе 2.
+1. ✅ **nginx за Xray — решено и проверено (2026-07-02).** `nginx/dexity.conf` по образцу
+   `mvladt.conf`: `listen 127.0.0.1:8443 ssl; server_name dexity.mvladt.ru;` + блок `:80` для
+   ACME/редирект + `location /api/ → proxy_pass 127.0.0.1:3001`. Экспериментально подтверждено:
+   Reality-fallback пропускает произвольный SNI (не только из `serverNames`) на fallback dest —
+   правки в конфиг Xray не потребовались.
 2. ✅ **Нативная зависимость убрана — решено и выполнено (2026-07-01).** Уходим с `better-sqlite3`
    на встроенный `node:sqlite`. По пути обнаружилось: `drizzle-orm/node-sqlite` есть только
    в 1.0-RC, не в стабильной 0.x — апгрейд ORM оказался невозможен как задумано. Решение —
@@ -98,20 +99,34 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
 
 ### Этап 2 — Первичная настройка прода (ручная, один раз)
 
-- [ ] **Установить Node 24 LTS через NodeSource (apt)** — `/usr/bin/node`, работает из systemd и
-      неинтерактивного SSH (nvm отвергли: per-user, грузится через shell-хук, ломает юнит и CD).
-      `build-essential`/`python3` НЕ нужны — после ухода на `node:sqlite` нативных модулей нет.
-      Сверить glibc сервера (на случай если решим вернуть prebuilt-зависимости)
-- [ ] DNS A-запись `dexity.mvladt.ru` → `188.225.37.62`
-- [ ] Каталоги на сервере: `/srv/dexity` (релизы, `data/`, `.env`)
-- [ ] `.env` на сервере (`NODE_ENV=production`, токены Yandex, `ACCESS_TOKEN`)
-- [ ] systemd-юнит (поправить путь энтрипоинта), `enable --now`
-- [ ] nginx server-block для `dexity.mvladt.ru` по образцу `mvladt.conf`
-      (`listen 127.0.0.1:8443 ssl` + `:80` ACME/redirect + `location /api/` → `:3001`)
-- [ ] TLS-сертификат (certbot) для `dexity.mvladt.ru`
-- [ ] Проверить Reality-fallback для SNI `dexity.mvladt.ru` (риск 1); при необходимости
-      добавить домен в `serverNames` Xray
-- [ ] **Первый ручной деплой и проверка живого прода** — до автоматизации
+- [x] **Установить Node 24 LTS через NodeSource (apt)** — готово (2026-07-02): Debian 13 (trixie),
+      glibc 2.41, `node v24.18.0`. `build-essential`/`python3` не потребовались (нативных модулей
+      нет после ухода на `node:sqlite`)
+- [x] DNS A-запись `dexity.mvladt.ru` → `188.225.37.62` — добавлена вручную в Timeweb (2026-07-02),
+      резолвится через внешние DNS (1.1.1.1, 8.8.8.8)
+- [x] Каталоги на сервере: `/srv/dexity/{releases, data}` + системный пользователь `dexity`
+- [x] `.env` на сервере (2026-07-02): `NODE_ENV=production`, новый `ACCESS_TOKEN` (сгенерирован
+      отдельно от dev), выделенный YC-сервисный аккаунт `dexity-prod` с узкой ролью
+      `ai.languageModels.user` (не переиспользуем широкий `editor` от dev-аккаунта `ai-model-user`),
+      `YC_SEARCH_API_KEY` — тот же, что в dev (там уже узкий `dexity-search` SA). Права `600`,
+      владелец `dexity`
+- [x] systemd-юнит установлен, `enable --now` — сервис активен (`dexity-server.service`)
+- [x] nginx server-block для `dexity.mvladt.ru` — установлен двухфазно: сначала только `:80`
+      (ACME), затем полный конфиг с `:8443 ssl` после выпуска сертификата (иначе `nginx -t`
+      падает на отсутствующих файлах сертификата)
+- [x] TLS-сертификат (certbot) — выпущен методом `webroot` (`-w /var/www/html`), как для
+      `mvladt.ru` (не `--nginx` плагин — конфиг лежит в `conf.d/`, не в `sites-enabled/`).
+      Истекает 2026-09-30, автопродление настроено certbot'ом
+- [x] **Проверен Reality-fallback для SNI `dexity.mvladt.ru` (риск 1) — работает без изменений
+      в Xray**: `curl --resolve` с этим SNI на `:443` доходит до nginx `:8443` (получен ответ от
+      дефолтного vhost на `:8443` ещё до того, как для домена появился `:8443`-блок) →
+      Reality пропускает произвольный SNI на fallback dest. Добавлять домен в `serverNames`
+      Xray не потребовалось
+- [x] **Первый ручной деплой и проверка живого прода** — готово (2026-07-02): собраны локально
+      `server`+`client` (чистая сборка, `npm ci --omit=dev` для прод-артефакта сервера),
+      разложены в `/srv/dexity/releases/16680f821440/`, симлинки `data`→`/srv/dexity/data` и
+      `current`→релиз. Живая проверка: статика `200`, `/api/chats` без токена `401`, с прод-токеном
+      `200` и пустой БД `[]`
 
 ### Этап 3 — CD (workflow выкатки)
 
@@ -154,3 +169,22 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
   сборка, живой CRUD на реальных данных). Запушено (3 коммита), CI на GitHub зелёный
   (run 28518845555). **Этап 1 полностью закрыт.** Следующий шаг: Этап 2 (первичная настройка
   прода — вручную, требует SSH-доступа к spb).
+- 2026-07-02 — Этап 2 выполнен полностью. Локальные deploy-конфиги (`nginx/dexity.conf`,
+  `deploy/dexity-server.service`, `deploy/README.md`) синхронизированы с решениями плана (были
+  под старую модель `git clone`+build на сервере). На spb: Node 24.18.0 (NodeSource), каталоги
+  `/srv/dexity/{releases,data}` + системный пользователь `dexity`, DNS A-запись добавлена вручную
+  в веб-панели Timeweb (`dexity.mvladt.ru → 188.225.37.62`; `yc` CLI для этого не подходит —
+  DNS регистратора не относится к Yandex Cloud). `.env` на сервере: новый `ACCESS_TOKEN`,
+  выделенный YC service account `dexity-prod` (роль `ai.languageModels.user`, без широкого
+  `editor`, который используется в dev-аккаунте `ai-model-user`) — создан через `yc iam
+  service-account create` + `yc resource-manager folder add-access-binding` + `yc iam api-key
+  create` (весь процесс через `yc` CLI, без браузера). `YC_SEARCH_API_KEY` — тот же, что в dev
+  (уже узкий `dexity-search` SA). TLS-сертификат — `certbot certonly --webroot` (тот же метод,
+  что для `mvladt.ru`, не `--nginx` плагин — конфиг лежит в `conf.d/`, не в `sites-enabled/`).
+  nginx-конфиг применён двухфазно (сначала только `:80` для ACME, потом полный конфиг с
+  `:8443 ssl` — иначе `nginx -t` падает на отсутствующих файлах сертификата). Reality-fallback
+  экспериментально пропускает произвольный SNI — риск 1 закрыт без правок Xray. Первый ручной
+  деплой: локальная чистая сборка `server`+`client` → rsync в `/srv/dexity/releases/<sha>` →
+  симлинки `data`/`current` → `systemctl enable --now`. Живая проверка: статика 200, API 401 без
+  токена / 200 с прод-токеном, пустая БД. **Прод живой: https://dexity.mvladt.ru.**
+  **Этап 2 полностью закрыт.** Следующий шаг: Этап 3 (CD — workflow автоматической выкатки).

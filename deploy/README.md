@@ -74,9 +74,11 @@ sudo journalctl -u dexity-server -f
 ## Сертификат Let's Encrypt
 
 ```bash
-sudo certbot certonly --nginx -d dexity.mvladt.ru
+sudo certbot certonly --webroot -w /var/www/html -d dexity.mvladt.ru
 ```
 
-Домен резолвится за Xray Reality fallback (`127.0.0.1:8443`, не в `sites-enabled`,
-конфиг — в `/etc/nginx/conf.d/`), поэтому `--nginx` плагин можно использовать только
-если certbot видит серверный блок `:80` для ACME-challenge — он есть в `nginx/dexity.conf`.
+Метод `webroot` — как для `mvladt.ru` (см. `/etc/letsencrypt/renewal/mvladt.ru.conf`), не `--nginx`
+плагин: домен терминирует TLS на `127.0.0.1:8443` за Xray Reality fallback, а конфиг лежит в
+`/etc/nginx/conf.d/` (не в `sites-enabled/`), поэтому `--nginx` плагин может отредактировать не тот
+файл. `:80`-блок в `nginx/dexity.conf` отдаёт `/.well-known/acme-challenge/` из `/var/www/html` —
+общий webroot для всех доменов на сервере.
