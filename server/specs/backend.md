@@ -329,81 +329,22 @@ POST /api/chats/:chatId/messages/stream
 
 ## Деплой
 
-### Nginx (`nginx/dexity.conf`)
+Прод: `https://dexity.mvladt.ru`, сервер **spb** (`188.225.37.62`). Живой с 2026-07-02.
 
-```nginx
-server {
-    listen 80;
-    server_name dexity.mvladt.ru;
-    return 301 https://$host$request_uri;
-}
+Nginx терминирует TLS на `127.0.0.1:8443` (не `:443` напрямую — порт занят Xray VLESS+Reality,
+входной нодой личного VPN; nginx сидит за Reality-fallback'ом). Node 24 LTS, systemd
+(`dexity-server.service`), immutable-релизы: `/srv/dexity/releases/<sha>` + симлинк `current`,
+БД (`data/db.sqlite3`) и `.env` живут вне релизов.
 
-server {
-    listen 443 ssl;
-    server_name dexity.mvladt.ru;
+CI/CD — GitHub Actions: `ci.yml` (typecheck + build на каждый push/PR в `main`) и `deploy.yml`
+(`workflow_dispatch` — кнопка в Actions катит прод: build → rsync в новый релиз → атомарное
+переключение симлинка → `systemctl restart` → healthcheck). Деплой-ключ — отдельный от личных,
+доступ на сервере не под root (пользователь `dexity`, узкий `sudoers.d` только на рестарт
+сервиса).
 
-    ssl_certificate     /etc/letsencrypt/live/dexity.mvladt.ru/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dexity.mvladt.ru/privkey.pem;
-
-    # Security headers
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Content-Type-Options    "nosniff" always;
-    add_header X-Frame-Options           "DENY" always;
-    add_header Content-Security-Policy   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'" always;
-
-    # Фронт (собранный dist, отдаётся статикой)
-    location / {
-        root /var/www/dexity/client/dist;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API и SSE → Fastify
-    location /api/ {
-        proxy_pass http://127.0.0.1:3001/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-
-        # Обязательно для SSE:
-        proxy_buffering          off;
-        proxy_cache              off;
-        proxy_read_timeout       300s;
-        proxy_set_header         Connection '';
-        chunked_transfer_encoding on;
-    }
-}
-```
-
-### systemd (`deploy/dexity-server.service`)
-
-```ini
-[Unit]
-Description=AI Chat backend (Fastify)
-After=network.target
-
-[Service]
-Type=simple
-User=dexity
-WorkingDirectory=/var/www/dexity/server
-EnvironmentFile=/var/www/dexity/server/.env
-ExecStart=/usr/bin/node dist/server/src/index.js
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Команды установки:**
-
-```bash
-sudo cp deploy/dexity-server.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now dexity-server
-sudo journalctl -u dexity-server -f   # логи
-```
+Точные конфиги и команды (включая первичную настройку сервера с нуля) — `nginx/dexity.conf`,
+`deploy/dexity-server.service`, `deploy/README.md`. История решений и открытые риски —
+`docs/vps-deploy-cicd-plan.md`.
 
 ### CORS
 

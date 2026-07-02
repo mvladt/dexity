@@ -24,7 +24,6 @@
 
 ## DevOps
 
-- [ ] CI/CD: автодеплой через `git pull && npm run build && systemctl restart dexity-server` (сейчас вручную)
 - [ ] Docker / Docker Compose (после MVP)
 
 ## Тесты
