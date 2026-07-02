@@ -2,7 +2,8 @@
 
 Статус: **в работе**. Многосессионная задача. Этот файл — источник правды по контексту и прогрессу.
 
-**Прод живой:** https://dexity.mvladt.ru (с 2026-07-02, задеплоен вручную, без CD)
+**Прод живой:** https://dexity.mvladt.ru — деплой через GitHub Actions (`workflow_dispatch`),
+кнопкой из вкладки Actions репозитория
 
 ## Цель
 
@@ -65,8 +66,10 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
    `/srv/dexity/{releases/<sha>, data/, .env, current→releases/<sha>}`. `data/db.sqlite3` (+ `-wal`,
    `-shm`) — в `/srv/dexity/data`, симлинком внутрь релиза → деплой физически её не трогает.
    Бэкап — cron + `sqlite3 .backup` (или `cp` при остановленном процессе). → Этап 2.
-6. **Секреты.** `.env` живёт **на сервере** (не в CI). В GitHub Secrets — только SSH deploy-ключ
-   и хост. Yandex-ключи в CI не нужны (гейт без e2e).
+6. ✅ **Секреты — решено и выполнено (2026-07-02).** `.env` живёт **на сервере**
+   (`/srv/dexity/.env`, права `600`), не в CI. В GitHub Secrets — только `DEPLOY_SSH_KEY` и
+   `DEPLOY_HOST_KEY` (host не секрет, захардкожен). Yandex-ключи в CI не нужны (гейт и healthcheck
+   без обращения к реальному токену).
 
 ## Этапы
 
@@ -128,16 +131,29 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
       `current`→релиз. Живая проверка: статика `200`, `/api/chats` без токена `401`, с прод-токеном
       `200` и пустой БД `[]`
 
-### Этап 3 — CD (workflow выкатки)
+### Этап 3 — CD (workflow выкатки) — ✅ выполнено 2026-07-02
 
-- [ ] Сгенерировать SSH deploy-ключ, положить публичный на сервер, приватный — в GitHub Secrets
-- [ ] Secrets: `SSH_KEY`, `DEPLOY_HOST` (+ при необходимости jump host)
-- [ ] `.github/workflows/deploy.yml` (`workflow_dispatch`):
-      build + `npm ci --omit=dev` в CI → rsync `client/dist` + `server/dist` + prod `node_modules`
-      (чисто JS после ухода от better-sqlite3) → ssh: `systemctl restart` → healthcheck.
-      На сервере `npm` не вызываем — артефакт immutable
-- [ ] Решить про атомарность: `releases/<sha>` + симлинк `current` (риск 4)
-- [ ] Тестовая выкатка кнопкой, проверка прода
+- [x] Сгенерирован отдельный SSH-ключ (`ed25519`, только для CI). На сервере — не root:
+      пользователь `dexity` (владелец `/srv/dexity`), шелл сменён с `nologin` на `bash`, ключ в
+      `~/.ssh/authorized_keys`, узкий `sudoers.d`: `NOPASSWD` только на
+      `systemctl restart dexity-server`, всё остальное через sudo требует пароль (проверено —
+      `sudo cat /etc/shadow` отклонён). Приватный ключ удалён с локальной машины после загрузки
+      секрета
+- [x] Проверено: firewall на spb (`iptables -L`) не режет по IP/гео — прямое SSH-подключение
+      работает и от раннера GitHub Actions, jump-хост через AMS не понадобился (та заметка была
+      актуальна для клиентской сети, не для сервера)
+- [x] Secrets в GitHub: `DEPLOY_SSH_KEY`, `DEPLOY_HOST_KEY` (пиннинг host key через
+      `ssh-keyscan`, без `StrictHostKeyChecking=no`). Host/user/root — не секрет, захардкожены в
+      workflow (`188.225.37.62`, `dexity`, `/srv/dexity`)
+- [x] `.github/workflows/deploy.yml` (`workflow_dispatch`): build (`npm ci` → `npm run build` →
+      `npm prune --omit=dev` для сервера, `VITE_API_URL='' npm run build` для клиента) → rsync в
+      `releases/<sha>` → на сервере: симлинки `data`/`current` → `sudo systemctl restart` →
+      очистка старых релизов (оставляет последние 5) → healthcheck (`POST /api/auth/verify`
+      ожидает `401` — сервер жив, токен намеренно неверный, секрет в CI не нужен; `GET /`
+      ожидает `200`)
+- [x] Тестовая выкатка кнопкой — зелёная за 49с (run
+      [28596778955](https://github.com/mvladt/dexity/actions/runs/28596778955)), прод обновился
+      на `35c6106f8b85`, старый релиз `16680f821440` сохранён под авто-очисткой
 
 ### Этап 4 — Документация и чистка
 
@@ -188,3 +204,15 @@ push в `main`, выкатка на сервер — кнопкой из GitHub 
   симлинки `data`/`current` → `systemctl enable --now`. Живая проверка: статика 200, API 401 без
   токена / 200 с прод-токеном, пустая БД. **Прод живой: https://dexity.mvladt.ru.**
   **Этап 2 полностью закрыт.** Следующий шаг: Этап 3 (CD — workflow автоматической выкатки).
+- 2026-07-02 — Этап 3 выполнен полностью, сразу следом за Этапом 2. Перед генерацией deploy-ключа
+  перепроверил риск с jump-хостом AMS: `iptables -L` на spb — `INPUT policy ACCEPT`, правил нет,
+  никакого geo/IP-фильтра. Прямое SSH с раннера GitHub Actions отработало с первого раза — заметка
+  «из-за рубежа нужен jump host» относится к клиентской сети (личный ISP/роутинг), не к серверу.
+  Ключ на CI — отдельный, не root: пользователь `dexity` получил `bash`-шелл и узкий `sudoers.d`
+  (`NOPASSWD` только на `systemctl restart dexity-server`, проверено что остальной sudo просит
+  пароль). Host key запиннен через `ssh-keyscan` в секрет, не `StrictHostKeyChecking=no`.
+  `.github/workflows/deploy.yml`: build → `npm prune --omit=dev` → rsync в `releases/<sha>` →
+  симлинки → restart → авто-очистка старых релизов (оставляет 5) → healthcheck без секретов
+  (`POST /api/auth/verify` ожидает `401` — сам факт ответа подтверждает, что процесс жив).
+  Тестовый прогон кнопкой — зелёный за 49с (run 28596778955), прод обновился корректно.
+  **Этап 3 полностью закрыт.** Остался только Этап 4 (документация/чистка, низкий приоритет).
