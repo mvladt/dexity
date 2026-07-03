@@ -725,15 +725,6 @@ body,
   border-radius: 4px;
 }
 
-.settings-cite-sample {
-  color: var(--g-color-text-info-heavy);
-  background: var(--g-color-base-info-light);
-  border-radius: 4px;
-  padding: 0 4px;
-  font-weight: 600;
-  font-size: 11px;
-}
-
 .settings-model-option {
   display: flex;
   align-items: center;

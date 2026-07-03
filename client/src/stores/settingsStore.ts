@@ -7,8 +7,6 @@ interface SettingsStore {
   setModel: (id: string) => void;
   systemPrompt: string;
   setSystemPrompt: (s: string) => void;
-  webSearch: boolean;
-  setWebSearch: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -18,8 +16,6 @@ export const useSettingsStore = create<SettingsStore>()(
       setModel: (model) => set({ model }),
       systemPrompt: '',
       setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
-      webSearch: true,
-      setWebSearch: (webSearch) => set({ webSearch }),
     }),
     {
       name: 'dexity-settings',

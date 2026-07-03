@@ -103,13 +103,13 @@ export const useStreamStore = create<StreamStore>()((set, get) => ({
     set({ streaming: true, ...INITIAL, error: null });
     const { appendMessage, patchChatTitle } = useChatStore.getState();
 
-    const { model, systemPrompt, webSearch } = useSettingsStore.getState();
+    const { model, systemPrompt } = useSettingsStore.getState();
 
     await streamMessages(chatId, content, {
       signal: abortController.signal,
       model,
       systemPrompt: systemPrompt || undefined,
-      webSearch,
+      webSearch: true,
 
       onThinkingDelta: (delta) =>
         set((s) => {

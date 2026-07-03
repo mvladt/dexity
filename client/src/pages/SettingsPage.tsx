@@ -4,7 +4,6 @@ import {
   Label,
   SegmentedRadioGroup,
   Select,
-  Switch,
   Text,
   TextArea,
 } from '@gravity-ui/uikit';
@@ -35,15 +34,9 @@ export function SettingsPage() {
   const setModel = useSettingsStore((s) => s.setModel);
   const systemPrompt = useSettingsStore((s) => s.systemPrompt);
   const setSystemPrompt = useSettingsStore((s) => s.setSystemPrompt);
-  const webSearch = useSettingsStore((s) => s.webSearch);
-  const setWebSearch = useSettingsStore((s) => s.setWebSearch);
 
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
-
-  // Stub-only тогглы — пока без сохранения, см. docs/settings-redesign-task.md
-  const [streaming, setStreaming] = useState(true);
-  const [showCitations, setShowCitations] = useState(true);
 
   // «Сохранено» badge в шапке — гасится через 1.5 с после любого изменения.
   const [saved, setSaved] = useState(false);
@@ -74,18 +67,8 @@ export function SettingsPage() {
     markSaved();
   };
 
-  const handleWebSearch = (v: boolean) => {
-    setWebSearch(v);
-    markSaved();
-  };
-
   const handleTheme = (value: string) => {
     setTheme(value as 'light' | 'dark' | 'system');
-    markSaved();
-  };
-
-  const handleStubToggle = (setter: (v: boolean) => void) => (v: boolean) => {
-    setter(v);
     markSaved();
   };
 
@@ -172,50 +155,6 @@ export function SettingsPage() {
             <Text variant="subheader-2" as="h2">
               Интерфейс
             </Text>
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row__info">
-              <Text variant="body-2" className="settings-row__title">
-                Web Search (агентский)
-              </Text>
-              <Text variant="body-1" color="hint">
-                Разрешить модели вызывать веб-поиск, когда она решит, что это нужно.
-              </Text>
-            </div>
-            <Switch checked={webSearch} onUpdate={handleWebSearch} size="m" />
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row__info">
-              <Text variant="body-2" className="settings-row__title">
-                Стриминг ответов
-              </Text>
-              <Text variant="body-1" color="hint">
-                Показывать ответ по мере генерации (SSE).
-              </Text>
-            </div>
-            <Switch
-              checked={streaming}
-              onUpdate={handleStubToggle(setStreaming)}
-              size="m"
-            />
-          </div>
-
-          <div className="settings-row">
-            <div className="settings-row__info">
-              <Text variant="body-2" className="settings-row__title">
-                Цитаты-маркеры
-              </Text>
-              <Text variant="body-1" color="hint">
-                Подсвечивать <span className="settings-cite-sample">[1]</span> кликабельными ссылками на источники.
-              </Text>
-            </div>
-            <Switch
-              checked={showCitations}
-              onUpdate={handleStubToggle(setShowCitations)}
-              size="m"
-            />
           </div>
 
           <div className="settings-row">
