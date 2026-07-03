@@ -7,6 +7,8 @@ interface SettingsStore {
   setModel: (id: string) => void;
   systemPrompt: string;
   setSystemPrompt: (s: string) => void;
+  collapseThinkingByDefault: boolean;
+  setCollapseThinkingByDefault: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -16,6 +18,8 @@ export const useSettingsStore = create<SettingsStore>()(
       setModel: (model) => set({ model }),
       systemPrompt: '',
       setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
+      collapseThinkingByDefault: false,
+      setCollapseThinkingByDefault: (collapseThinkingByDefault) => set({ collapseThinkingByDefault }),
     }),
     {
       name: 'dexity-settings',

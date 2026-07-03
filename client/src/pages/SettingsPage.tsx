@@ -4,6 +4,7 @@ import {
   Label,
   SegmentedRadioGroup,
   Select,
+  Switch,
   Text,
   TextArea,
 } from '@gravity-ui/uikit';
@@ -34,6 +35,8 @@ export function SettingsPage() {
   const setModel = useSettingsStore((s) => s.setModel);
   const systemPrompt = useSettingsStore((s) => s.systemPrompt);
   const setSystemPrompt = useSettingsStore((s) => s.setSystemPrompt);
+  const collapseThinkingByDefault = useSettingsStore((s) => s.collapseThinkingByDefault);
+  const setCollapseThinkingByDefault = useSettingsStore((s) => s.setCollapseThinkingByDefault);
 
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -69,6 +72,11 @@ export function SettingsPage() {
 
   const handleTheme = (value: string) => {
     setTheme(value as 'light' | 'dark' | 'system');
+    markSaved();
+  };
+
+  const handleCollapseThinking = (v: boolean) => {
+    setCollapseThinkingByDefault(v);
     markSaved();
   };
 
@@ -155,6 +163,22 @@ export function SettingsPage() {
             <Text variant="subheader-2" as="h2">
               Интерфейс
             </Text>
+          </div>
+
+          <div className="settings-row">
+            <div className="settings-row__info">
+              <Text variant="body-2" className="settings-row__title">
+                Сворачивать «размышления» по умолчанию
+              </Text>
+              <Text variant="body-1" color="hint">
+                Блоки thinking будут закрыты сразу, разворачиваются по клику.
+              </Text>
+            </div>
+            <Switch
+              checked={collapseThinkingByDefault}
+              onUpdate={handleCollapseThinking}
+              size="m"
+            />
           </div>
 
           <div className="settings-row">

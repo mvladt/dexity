@@ -140,24 +140,24 @@ function buildWebPart(tool: WebToolState) {
   };
 }
 
-function buildThinkingPart(content: string, isLast: boolean) {
+function buildThinkingPart(content: string, isLast: boolean, collapseByDefault: boolean) {
   return {
     type: 'thinking' as const,
     data: {
       content,
       status: isLast ? ('thinking' as const) : ('thought' as const),
-      defaultExpanded: true,
+      defaultExpanded: !collapseByDefault,
       enabledCopy: true,
     },
   };
 }
 
-function partsToAikitContent(parts: StreamPart[]): TAssistantMessageContent {
+function partsToAikitContent(parts: StreamPart[], collapseByDefault: boolean): TAssistantMessageContent {
   const result: TAssistantMessageContent = [];
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
     if (p.type === 'thinking') {
-      result.push(buildThinkingPart(p.content, i === parts.length - 1));
+      result.push(buildThinkingPart(p.content, i === parts.length - 1, collapseByDefault));
     } else if (p.type === 'tool') {
       result.push(buildToolPart(p.state));
     } else {
@@ -167,7 +167,7 @@ function partsToAikitContent(parts: StreamPart[]): TAssistantMessageContent {
   return result;
 }
 
-function toAikitMessage(msg: Message): TChatMessage {
+function toAikitMessage(msg: Message, collapseByDefault: boolean): TChatMessage {
   const snapshot = msg.toolData?.parts;
   const hasTool = !!(
     msg.toolData?.calls?.length ||
@@ -179,7 +179,7 @@ function toAikitMessage(msg: Message): TChatMessage {
     if (snapshot?.length) {
       // Полная последовательность парт в порядке появления (thinking₁, tool₁, thinking₂, …).
       for (const p of snapshot) {
-        if (p.type === 'thinking') parts.push(buildThinkingPart(p.content, false));
+        if (p.type === 'thinking') parts.push(buildThinkingPart(p.content, false, collapseByDefault));
         else if (p.type === 'fetch')
           parts.push(
             buildFetchPart(
@@ -192,7 +192,7 @@ function toAikitMessage(msg: Message): TChatMessage {
       }
     } else {
       // Legacy без снапшота: один склеенный thinking + либо calls (новый), либо плоский sources.
-      if (msg.thinking) parts.push(buildThinkingPart(msg.thinking, false));
+      if (msg.thinking) parts.push(buildThinkingPart(msg.thinking, false, collapseByDefault));
       if (msg.toolData?.calls?.length) {
         for (const sources of msg.toolData.calls) {
           parts.push(buildToolPart({ kind: 'web', status: 'success', query: '', sources }));
@@ -267,16 +267,17 @@ export function ChatStream({ chatId, onUserMessage }: Props) {
   const cancel = useStreamStore((s) => s.cancel);
   const error = useStreamStore((s) => s.error);
   const model = useSettingsStore((s) => s.model);
+  const collapseThinkingByDefault = useSettingsStore((s) => s.collapseThinkingByDefault);
 
   // Парты собираются в порядке поступления: thinking, потом tool, потом
   // снова thinking (если модель «думает» над результатом поиска), и так
   // далее, заканчивается text-партом с финальным ответом.
-  const streamingParts = partsToAikitContent(parts);
+  const streamingParts = partsToAikitContent(parts, collapseThinkingByDefault);
 
   // Пока стрим запущен, но ни одного парта ещё нет — не показываем пустой
   // assistant-пузырь. Вместо него aikit нарисует Loader (status='submitted').
   const displayMessages: TChatMessage[] = [
-    ...messages.map(toAikitMessage),
+    ...messages.map((m) => toAikitMessage(m, collapseThinkingByDefault)),
     ...(streaming && parts.length > 0
       ? [
           {
