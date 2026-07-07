@@ -48,6 +48,12 @@ cd client && npm run dev
 `server/.env`: `PORT`, `NODE_ENV`, `ACCESS_TOKEN`, `YC_FOLDER_ID`, `YC_API_KEY`, `MODEL_ID`, `DATABASE_PATH`, `CORS_ORIGIN`  
 `client/.env`: `VITE_API_URL`
 
+## Продакшн-сервер
+
+Деплой описан в `deploy/README.md`. Общее администрирование сервера (сервер целиком, фаервол,
+другие сервисы на нём) ведётся в отдельном соседнем проекте — скорее всего,
+`~/Projects/MyOwn/server-management`.
+
 ## Спецификация
 
 Спеки хранятся рядом с кодом:
