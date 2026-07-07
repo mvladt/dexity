@@ -44,7 +44,7 @@ test.describe('ChatComposer — view="full" layout', () => {
   // =========================================================================
   test.describe('Empty-state (/chat — no active chat)', () => {
 
-    test('Uses full view submit button; model Select and Disclaimer are inside PromptInput footer', async ({ page }) => {
+    test('Uses full view submit button; model Select is inside PromptInput footer', async ({ page }) => {
       await loginAndNavigate(page);
 
       // Full view renders data-qa="submit-button-full"; simple view would be "submit-button-simple"
@@ -57,9 +57,6 @@ test.describe('ChatComposer — view="full" layout', () => {
 
       // Model Select is inside that footer
       await expect(composerFooter.locator('.g-select-control').first()).toBeVisible();
-
-      // Disclaimer text is inside that footer
-      await expect(composerFooter.getByText(/AI може/i)).toBeVisible();
 
       // Old external footer is gone
       await expect(page.locator('.chat-input-footer')).not.toBeVisible();
@@ -122,7 +119,7 @@ test.describe('ChatComposer — view="full" layout', () => {
       const popup = page.locator('.g-select-popup').first();
       await expect(popup).toBeVisible({ timeout: 5000 });
 
-      // Pick a model that is different from the default (Qwen3 235B)
+      // Pick a model that is different from the default (DeepSeek V4 Flash)
       await popup.locator('.g-select-list__option-default-label', { hasText: 'YandexGPT Lite' }).click();
       await expect(popup).not.toBeVisible({ timeout: 3000 });
 
@@ -134,7 +131,7 @@ test.describe('ChatComposer — view="full" layout', () => {
       await selectControl.click();
       const popup2 = page.locator('.g-select-popup').first();
       await expect(popup2).toBeVisible({ timeout: 5000 });
-      await popup2.locator('.g-select-list__option-default-label', { hasText: 'Qwen3 235B' }).click();
+      await popup2.locator('.g-select-list__option-default-label', { hasText: 'DeepSeek V4 Flash' }).click();
     });
   });
 
@@ -144,7 +141,7 @@ test.describe('ChatComposer — view="full" layout', () => {
   test.describe('Mobile viewport (375x667)', () => {
     test.use({ viewport: { width: 375, height: 667 } });
 
-    test('Disclaimer is hidden at 375px; Select is visible; textarea accepts input', async ({ page }) => {
+    test('Select is visible at 375px; textarea accepts input', async ({ page }) => {
       await loginAndNavigate(page);
 
       // The full view submit button is still present
@@ -154,10 +151,6 @@ test.describe('ChatComposer — view="full" layout', () => {
       const composerFooter = page.locator('.g-aikit-prompt-input-footer .chat-composer-footer');
       await expect(composerFooter).toBeVisible();
       await expect(composerFooter.locator('.g-select-control').first()).toBeVisible();
-
-      // Disclaimer is hidden by the media query (<=480px)
-      const disclaimer = composerFooter.locator('.chat-composer-disclaimer');
-      await expect(disclaimer).not.toBeVisible();
 
       // Textarea is functional — can type a message
       const textarea = page.getByRole('textbox');

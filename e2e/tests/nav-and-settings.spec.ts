@@ -44,7 +44,7 @@ async function cancelStreamIfActive(page: Page) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Nav rail (desktop)', () => {
-  test('Shows Dexity title, three nav items, and ThemeSwitcher on root page', async ({ page }) => {
+  test('Shows Dexity title and three nav items on root page', async ({ page }) => {
     await loginAndNavigate(page);
 
     // Desktop nav wrapper is visible
@@ -58,11 +58,6 @@ test.describe('Nav rail (desktop)', () => {
     await expect(desktopNav.getByText('Новый чат')).toBeVisible();
     await expect(desktopNav.getByText('История')).toBeVisible();
     await expect(desktopNav.getByText('Настройки')).toBeVisible();
-
-    // ThemeSwitcher in footer (renders as a Switch — role="switch")
-    const navFooter = desktopNav.locator('.app-nav-footer');
-    await expect(navFooter).toBeVisible();
-    await expect(navFooter.getByRole('switch')).toBeVisible();
   });
 
   test('Clicking "История" navigates to /history and shows history page', async ({ page }) => {
