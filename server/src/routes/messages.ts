@@ -198,9 +198,13 @@ const messagesRoute: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      // Одно system-сообщение, не два: шаблон промпта некоторых моделей
+      // (Qwen3.6 35B) требует ровно одно system-сообщение и падает с
+      // "System message must be at the beginning", если их два подряд.
+      const systemContent = [buildBaseSystem(timeZone), systemPrompt].filter(Boolean).join('\n\n');
+
       const llmMessages: ChatCompletionMessageParam[] = [
-        { role: 'system' as const, content: buildBaseSystem(timeZone) },
-        ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+        { role: 'system' as const, content: systemContent },
         ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
         // При retry висячий вопрос уже последний в history — не дублируем.
         ...(isRetry ? [] : [{ role: 'user' as const, content: userContent }]),
