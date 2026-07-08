@@ -1,8 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
+import { getModel, DEFAULT_MODEL_ID } from '../../client/src/models';
 
 const BASE_URL = 'http://localhost:5173';
 const API_URL = 'http://localhost:3001';
 const TOKEN = 'kakako';
+const DEFAULT_MODEL_LABEL = getModel(DEFAULT_MODEL_ID).label;
 
 async function loginAndNavigate(page: Page, url = `${BASE_URL}/chat`) {
   await page.goto(`${BASE_URL}/login`);
@@ -77,12 +79,12 @@ async function cancelStreamIfActive(page: Page) {
 
 test.describe('Model selector & ContextIndicator', () => {
   test.describe('Выбор модели', () => {
-    test('По умолчанию выбрана модель из настроек (DeepSeek V4 Flash)', async ({ page }) => {
+    test(`По умолчанию выбрана модель из настроек (${DEFAULT_MODEL_LABEL})`, async ({ page }) => {
       await loginAndNavigate(page);
 
       const defaultLabel = await getSelectedModelLabel(page);
-      expect(defaultLabel, 'Дефолтная модель должна быть DeepSeek V4 Flash').toContain(
-        'DeepSeek V4 Flash',
+      expect(defaultLabel, `Дефолтная модель должна быть ${DEFAULT_MODEL_LABEL}`).toContain(
+        DEFAULT_MODEL_LABEL,
       );
     });
 
@@ -104,9 +106,9 @@ test.describe('Model selector & ContextIndicator', () => {
       );
 
       // Восстановить дефолт
-      await selectModel(page, 'DeepSeek V4 Flash');
+      await selectModel(page, DEFAULT_MODEL_LABEL);
       const restored = await getSelectedModelLabel(page);
-      expect(restored).toContain('DeepSeek V4 Flash');
+      expect(restored).toContain(DEFAULT_MODEL_LABEL);
     });
   });
 

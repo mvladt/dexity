@@ -17,7 +17,7 @@ export const MODELS: ModelInfo[] = [
   { id: 'aliceai-llm-flash', label: 'Alice AI Flash', maxContext: 65536 },
 ];
 
-export const DEFAULT_MODEL_ID = 'deepseek-v4-flash';
+export const DEFAULT_MODEL_ID = 'qwen3.6-35b-a3b';
 
 export function getModel(id: string): ModelInfo {
   return MODELS.find((m) => m.id === id) ?? MODELS[0];

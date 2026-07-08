@@ -1,8 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
+import { getModel, DEFAULT_MODEL_ID } from '../../client/src/models';
 
 const BASE_URL = 'http://localhost:5173';
 const API_URL = 'http://localhost:3001';
 const TOKEN = 'kakako';
+const DEFAULT_MODEL_LABEL = getModel(DEFAULT_MODEL_ID).label;
 
 async function loginAndNavigate(page: Page, url = `${BASE_URL}/chat`) {
   await page.goto(`${BASE_URL}/login`);
@@ -119,7 +121,7 @@ test.describe('ChatComposer — view="full" layout', () => {
       const popup = page.locator('.g-select-popup').first();
       await expect(popup).toBeVisible({ timeout: 5000 });
 
-      // Pick a model that is different from the default (DeepSeek V4 Flash)
+      // Pick a model that is different from the default
       await popup.locator('.g-select-list__option-default-label', { hasText: 'YandexGPT Lite' }).click();
       await expect(popup).not.toBeVisible({ timeout: 3000 });
 
@@ -131,7 +133,7 @@ test.describe('ChatComposer — view="full" layout', () => {
       await selectControl.click();
       const popup2 = page.locator('.g-select-popup').first();
       await expect(popup2).toBeVisible({ timeout: 5000 });
-      await popup2.locator('.g-select-list__option-default-label', { hasText: 'DeepSeek V4 Flash' }).click();
+      await popup2.locator('.g-select-list__option-default-label', { hasText: DEFAULT_MODEL_LABEL }).click();
     });
   });
 
