@@ -150,10 +150,10 @@ test.describe('History page (/history)', () => {
     await expect(page.getByText(chat1Title)).toBeVisible();
     await expect(page.getByText(chat2Title)).toBeVisible();
 
-    // Type the unique suffix of chat1 into the search input
+    // Type the unique suffix of chat1 into the search input.
+    // Поле фильтра списка (uikit List) рендерится с role="combobox", не "textbox".
     const uniqueSuffix = chat1Title.split('-').pop()!;
-    // HistoryList renders its search with placeholder "Search your chats"
-    const searchInput = page.getByPlaceholder('Search your chats');
+    const searchInput = page.getByRole('combobox');
     await searchInput.fill(uniqueSuffix);
 
     // chat1 should remain, chat2 (different suffix) should disappear

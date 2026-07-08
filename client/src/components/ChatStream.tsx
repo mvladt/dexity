@@ -53,7 +53,7 @@ type WebToolState = Extract<ToolState, { kind: 'web' }>;
 
 function buildFetchPart(tool: FetchToolState) {
   const base = {
-    toolName: 'Fetch',
+    toolName: 'Запрос',
     toolIcon: <Icon data={Globe} size={16} />,
   };
   // Показываем домен (полный URL бывает длинным — captcha, query-параметры).
@@ -104,7 +104,7 @@ function truncateQuery(query: string): string {
 
 function buildWebPart(tool: WebToolState) {
   const base = {
-    toolName: 'Search',
+    toolName: 'Поиск',
     toolIcon: <Icon data={Magnifier} size={16} />,
   };
   // Показываем сам запрос. Если его нет (legacy-история) — откатываемся к статусным текстам.
@@ -112,7 +112,7 @@ function buildWebPart(tool: WebToolState) {
   if (tool.status === 'loading') {
     return {
       type: 'tool' as const,
-      data: { ...base, status: 'loading' as const, headerContent: queryHeader ?? 'Yandex Search…' },
+      data: { ...base, status: 'loading' as const, headerContent: queryHeader ?? 'Поиск в Яндексе…' },
     };
   }
   if (tool.status === 'error') {
