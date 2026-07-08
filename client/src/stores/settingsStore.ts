@@ -18,7 +18,7 @@ export const useSettingsStore = create<SettingsStore>()(
       setModel: (model) => set({ model }),
       systemPrompt: '',
       setSystemPrompt: (systemPrompt) => set({ systemPrompt }),
-      collapseThinkingByDefault: false,
+      collapseThinkingByDefault: true,
       setCollapseThinkingByDefault: (collapseThinkingByDefault) => set({ collapseThinkingByDefault }),
     }),
     {
