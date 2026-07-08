@@ -8,3 +8,5 @@ logs/
 
 # Артефакты playwright-cli из cwd
 current.yml
+
+*.local
