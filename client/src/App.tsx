@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, ToasterComponent } from '@gravity-ui/uikit';
+import { ThemeProvider, ToasterComponent, ToasterProvider } from '@gravity-ui/uikit';
+import { toaster } from '@gravity-ui/uikit/toaster-singleton';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
 
@@ -43,32 +44,34 @@ export default function App() {
 
   return (
     <ThemeProvider theme={resolvedTheme}>
-      <ToasterComponent />
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <GuestGuard>
-                <LoginPage />
-              </GuestGuard>
-            }
-          />
-          <Route
-            element={
-              <AuthGuard>
-                <AppLayout />
-              </AuthGuard>
-            }
-          >
-            <Route index element={<ChatPage />} />
-            <Route path="/chat/:chatId" element={<ChatPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <ToasterProvider toaster={toaster}>
+        <ToasterComponent />
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Routes>
+            <Route
+              path="/login"
+              element={
+                <GuestGuard>
+                  <LoginPage />
+                </GuestGuard>
+              }
+            />
+            <Route
+              element={
+                <AuthGuard>
+                  <AppLayout />
+                </AuthGuard>
+              }
+            >
+              <Route index element={<ChatPage />} />
+              <Route path="/chat/:chatId" element={<ChatPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </ToasterProvider>
     </ThemeProvider>
   );
 }
