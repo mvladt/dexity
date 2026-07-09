@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider } from '@gravity-ui/uikit';
+import { ThemeProvider, ToasterComponent } from '@gravity-ui/uikit';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
 
@@ -43,6 +43,7 @@ export default function App() {
 
   return (
     <ThemeProvider theme={resolvedTheme}>
+      <ToasterComponent />
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Routes>
           <Route

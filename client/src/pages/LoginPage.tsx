@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Icon, Text, TextInput } from '@gravity-ui/uikit';
+import { toaster } from '@gravity-ui/uikit/toaster-singleton';
 import { ArrowRight, ArrowRightFromSquare, Book } from '@gravity-ui/icons';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
@@ -82,9 +83,14 @@ export function LoginPage() {
             view="outlined"
             size="l"
             width="max"
-            href={REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            onClick={() =>
+              toaster.add({
+                name: 'docs-stub',
+                title: 'Доки пока нет :)',
+                theme: 'info',
+                autoHiding: 3000,
+              })
+            }
           >
             <Icon data={Book} size={14} />
             Документация
