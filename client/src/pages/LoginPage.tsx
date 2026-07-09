@@ -60,13 +60,7 @@ export function LoginPage() {
               autoFocus
               validationState={error ? 'invalid' : undefined}
             />
-            {error ? (
-              <span className="login-field__error">{error}</span>
-            ) : (
-              <span className="login-field__hint">
-                ACCESS_TOKEN из <code>server/.env</code>
-              </span>
-            )}
+            {error && <span className="login-field__error">{error}</span>}
           </div>
           <Button
             type="submit"
